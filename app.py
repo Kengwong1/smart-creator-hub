@@ -7,18 +7,19 @@ import urllib.parse
 from deep_translator import GoogleTranslator
 
 # --- 1. การตั้งค่าหน้าเว็บ ---
-st.set_page_config(page_title="Smart Creator Hub v6.2", page_icon="🎬", layout="wide")
+st.set_page_config(page_title="Smart Creator Hub v6.3", page_icon="🎬", layout="wide")
 load_dotenv()
 
-# --- 2. คลังสไตล์ภาพระดับโปร (จูนใหม่ให้สวยทุกสไตล์) ---
+# --- 2. คลังสไตล์ภาพระดับโปร (อัปเกรดความแม่นยำ v6.3) ---
 STYLE_PRESETS = {
-    "📸 ภาพถ่ายสมจริง (Realistic)": ", professional photography, realistic, natural lighting, 8k, sharp focus, authentic textures",
-    "🎨 การ์ตูน / อนิเมะ (Anime)": ", vibrant cartoon style, anime illustration, clean lines, colorful, high quality 2D art",
-    "🧸 3D แอนิเมชั่น (Pixar Style)": ", cute 3D character style, Pixar inspired, octane render, soft studio lighting, high detailed 3D",
-    "🖼️ ภาพวาดดิจิทัล (Digital Art)": ", modern digital illustration, flat art style, clean vector look, professional graphic design",
-    "🖌️ ภาพวาดสีน้ำมัน (Oil Painting)": ", masterpiece oil painting, visible brush strokes, rich textures, artistic lighting, classical art",
-    "🚀 ไซเบอร์พังค์ (Cyberpunk)": ", futuristic style, neon glowing lights, high-tech atmosphere, cinematic dark blue and pink tones",
-    "📝 ภาพสเก็ตช์ (Pencil Sketch)": ", hand-drawn pencil sketch, graphite shading, artistic drawing, paper texture, detailed lines"
+    # เพิ่มคีย์เวิร์ดเน้นความแม่นยำของรูปทรง
+    "📸 ภาพถ่ายสมจริง (Realistic)": ", professional photography, realistic, natural lighting, 8k, sharp focus, authentic textures, precise mechanical details, accurate hardware shapes, highly detailed",
+    "🎨 การ์ตูน / อนิเมะ (Anime)": ", vibrant cartoon style, anime illustration, clean lines, colorful, high quality 2D art, detailed character design",
+    "🧸 3D แอนิเมชั่น (Pixar Style)": ", cute 3D character style, Pixar inspired, octane render, soft studio lighting, high detailed 3D model, precise shapes",
+    "🖼️ ภาพวาดดิจิทัล (Digital Art)": ", modern digital illustration, flat art style, clean vector look, professional graphic design, accurate forms",
+    "🖌️ ภาพวาดสีน้ำมัน (Oil Painting)": ", masterpiece oil painting, visible brush strokes, rich textures, artistic lighting, classical art, detailed composition",
+    "🚀 ไซเบอร์พังค์ (Cyberpunk)": ", futuristic style, neon glowing lights, high-tech atmosphere, cinematic dark blue and pink tones, detailed sci-fi elements",
+    "📝 ภาพสเก็ตช์ (Pencil Sketch)": ", hand-drawn pencil sketch, graphite shading, artistic drawing, paper texture, detailed lines, accurate perspective"
 }
 
 # --- 3. ระบบ AI ---
@@ -49,19 +50,19 @@ def generate_thai_content(topic):
 
 # --- 4. ฟังก์ชันสร้าง URL รูปภาพ ---
 def get_img_url(visual_elements, width, height, style_suffix):
-    # ปรับปรุงโครงสร้าง URL ให้เสถียรที่สุด
     full_prompt = f"{visual_elements} {style_suffix}"
     encoded = urllib.parse.quote(full_prompt)
     seed = int(time.time())
-    return f"https://image.pollinations.ai/prompt/{encoded}?width={width}&height={height}&seed={seed}&nologo=true&model=flux"
+    # เพิ่ม quality=100 เพื่อขอคุณภาพสูงสุด
+    return f"https://image.pollinations.ai/prompt/{encoded}?width={width}&height={height}&seed={seed}&nologo=true&model=flux&quality=100"
 
 # --- 5. Sidebar เมนู ---
 with st.sidebar:
-    st.title("🎬 Smart Creator Hub v6.2")
+    st.title("🎬 Smart Creator Hub v6.3")
     st.write(f"สวัสดีค่ะคุณเก่ง ✨")
     menu = st.radio("เลือกเครื่องมือ:", ["✨ Magic Content (ชุดใหญ่)", "🎨 เสกรูปภาพอย่างเดียว", "🎬 วางแผนคอนเทนต์", "💰 เขียนแคปชั่นป้ายยา"])
     st.divider()
-    st.caption("v6.2 | Multi-Style Engine")
+    st.caption("v6.3 | Precision Update")
 
 # --- 6. โซนการทำงาน ---
 
@@ -77,7 +78,7 @@ if menu == "✨ Magic Content (ชุดใหญ่)":
     if st.button("🚀 ผลิตคอนเทนต์ชุดใหญ่"):
         if not topic: st.warning("กรุณาใส่หัวข้อค่ะ")
         else:
-            with st.spinner("⏳ กำลังเสกเนื้อหาและรูปภาพ..."):
+            with st.spinner("⏳ กำลังเสกเนื้อหาและรูปภาพที่แม่นยำขึ้น..."):
                 text_res = generate_thai_content(topic)
                 if text_res == "QUOTA_FULL":
                     st.error("⚠️ โควต้าเต็ม รบกวนรอ 1 นาทีนะคะ")
@@ -90,9 +91,9 @@ if menu == "✨ Magic Content (ชุดใหญ่)":
                     st.subheader("🖼️ ภาพหน้าปกคอนเทนต์")
                     if "9:16" in chosen_size:
                         c1, c2, c3 = st.columns([1, 1.2, 1])
-                        with c2: st.image(img_url, use_container_width=True)
+                        with c2: st.image(img_url, use_container_width=True, caption="ภาพมีความแม่นยำสูงขึ้น")
                     else:
-                        st.image(img_url, use_container_width=True)
+                        st.image(img_url, use_container_width=True, caption="ภาพมีความแม่นยำสูงขึ้น")
                     
                     st.markdown(f'<div style="text-align:center;"><a href="{img_url}" target="_blank" style="color:#FF4B4B; font-weight:bold; text-decoration:none;">📥 ดาวน์โหลดภาพขนาดเต็ม</a></div>', unsafe_allow_html=True)
                     st.divider()
@@ -101,14 +102,14 @@ if menu == "✨ Magic Content (ชุดใหญ่)":
 
 # --- 6.2 เสกรูปภาพอย่างเดียว ---
 elif menu == "🎨 เสกรูปภาพอย่างเดียว":
-    st.header("🎨 AI ศิลปินเสกรูปภาพ (เลือกสไตล์ได้ตามใจ)")
+    st.header("🎨 AI ศิลปินเสกรูปภาพ (แม่นยำทุกสไตล์)")
     img_desc = st.text_area("อยากได้รูปอะไรคะ?")
     col_a, col_b = st.columns(2)
     with col_a: style = st.selectbox("เลือกสไตล์:", list(STYLE_PRESETS.keys()))
     with col_b: size = st.selectbox("เลือกขนาด:", ["แนวตั้ง (9:16)", "แนวนอน (16:9)", "จัตุรัส (1:1)"])
     
     if st.button("✨ เริ่มวาดรูป"):
-        with st.spinner("🎨 กำลังบรรเลงงานศิลปะ..."):
+        with st.spinner("🎨 กำลังบรรเลงงานศิลปะที่แม่นยำ..."):
             visual_elements = translate_to_visual_elements(img_desc)
             w, h = (540, 960) if "9:16" in size else (960, 540) if "16:9" in size else (768, 768)
             final_url = get_img_url(visual_elements, w, h, STYLE_PRESETS[style])
