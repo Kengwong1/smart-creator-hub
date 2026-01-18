@@ -7,45 +7,59 @@ import io
 from PIL import Image
 import time
 
-# --- 1. ตั้งค่าพื้นฐาน ---
+# --- 1. การตั้งค่าหน้าเว็บ ---
 st.set_page_config(page_title="Smart Creator Hub", page_icon="🎬", layout="wide")
 load_dotenv()
 
-gemini_api_key = os.getenv("GEMINI_API_KEY")
-hf_api_key = os.getenv("HUGGINGFACE_API_KEY")
+# --- 2. ฟังก์ชันเรียกใช้ Gemini พร้อมระบบสลับกุญแจ (Rotation) ---
+def call_gemini_with_retry(prompt_text):
+    # ดึงรายการกุญแจจาก Secrets
+    keys = st.secrets.get("GEMINI_KEYS", [])
+    if not keys:
+        st.error("❌ ไม่พบรายการ GEMINI_KEYS ใน Secrets ค่ะ")
+        st.stop()
+    
+    for idx, key in enumerate(keys):
+        try:
+            genai.configure(api_key=key)
+            model = genai.GenerativeModel('gemini-flash-latest')
+            response = model.generate_content(prompt_text)
+            return response.text
+        except Exception as e:
+            # ถ้าโควต้าเต็ม ให้ลองกุญแจดอกถัดไป
+            if "429" in str(e) or "ResourceExhausted" in str(e):
+                if idx < len(keys) - 1:
+                    st.warning(f"⚠️ กุญแจดอกที่ {idx+1} เต็ม กำลังสลับไปใช้ดอกที่ {idx+2} ค่ะ")
+                    time.sleep(2)
+                    continue
+                else:
+                    st.error("❌ กุญแจทุกดอกโควต้าเต็มหมดแล้วค่ะ รบกวนรอ 1-2 นาทีนะค")
+                    st.stop()
+            else:
+                st.error(f"เกิดข้อผิดพลาด: {e}")
+                st.stop()
 
-if not gemini_api_key:
-    st.error("❌ ไม่พบ Gemini API Key")
-    st.stop()
-
-genai.configure(api_key=gemini_api_key)
-model_text = genai.GenerativeModel('gemini-flash-latest')
-
-# --- 2. ฟังก์ชันเสกรูปพร้อมระบบ Auto-Retry และกำหนดขนาด ---
-HF_API_URL = "https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-xl-base-1.0"
-hf_headers = {"Authorization": f"Bearer {hf_api_key}"}
-
-def generate_image_with_retry(prompt, width, height, max_retries=5):
-    # กำหนดพารามิเตอร์ขนาดภาพ
+# --- 3. ฟังก์ชันเสกรูปพร้อมระบบ Auto-Retry และขนาดภาพ ---
+def generate_image_logic(prompt, width, height, hf_key, max_retries=5):
+    api_url = "https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-xl-base-1.0"
+    headers = {"Authorization": f"Bearer {hf_key}"}
     payload = {
         "inputs": prompt,
-        "parameters": {
-            "width": width,
-            "height": height
-        }
+        "parameters": {"width": width, "height": height}
     }
+    
     for i in range(max_retries):
-        response = requests.post(HF_API_URL, headers=hf_headers, json=payload)
+        response = requests.post(api_url, headers=headers, json=payload)
         if response.status_code == 200:
             return response.content
         elif response.status_code == 503:
-            st.info(f"⏳ เซิร์ฟเวอร์วาดรูปกำลังตื่น... ลองใหม่ครั้งที่ {i+1}/{max_retries}")
+            st.info(f"⏳ เซิร์ฟเวอร์วาดรูปกำลังตื่น... กำลังลองใหม่ครั้งที่ {i+1}/{max_retries} (รอ 10 วิ)")
             time.sleep(10)
         else:
             raise Exception(f"Hugging Face Error: {response.status_code}")
-    raise Exception("เซิร์ฟเวอร์ไม่ว่างนานเกินไป")
+    raise Exception("เซิร์ฟเวอร์ไม่ว่างนานเกินไปค่ะ")
 
-# --- 3. Sidebar เมนู ---
+# --- 4. Sidebar เมนู ---
 with st.sidebar:
     st.title("🎬 Smart Creator Hub")
     st.write("สวัสดีค่ะคุณเก่ง ✨")
@@ -54,69 +68,85 @@ with st.sidebar:
         ["🎨 เสกรูปภาพด้วย AI", "🎬 วางแผนคอนเทนต์", "💰 เขียนแคปชั่นป้ายยา", "🔍 ตั้งชื่อคลิปให้น่าคลิก", "💬 ผู้ช่วยตอบคอมเมนต์"]
     )
     st.divider()
-    st.caption("v2.3 | Multi-Size Support")
+    st.caption("v2.4 | Multi-API & Size Support")
 
-# --- โซน 1: เสกรูปภาพด้วย AI (เพิ่มเลือกขนาด) ---
+# --- 5. โซนการทำงานตามเมนู ---
+
+# --- เมนู: เสกรูปภาพ ---
 if menu == "🎨 เสกรูปภาพด้วย AI":
-    st.header("🎨 AI ศิลปินเสกรูปภาพตามขนาดที่ต้องการ")
+    st.header("🎨 AI ศิลปินเสกรูปภาพ (รองรับขนาดภาพและสลับกุญแจอัตโนมัติ)")
+    img_desc = st.text_area("บรรยายภาพที่ต้องการ (ภาษาไทย)", placeholder="เช่น แมวซ่อมมือถือในโลกอนาคต")
     
-    img_desc = st.text_area("บรรยายภาพที่ต้องการ (ภาษาไทย)", placeholder="เช่น นกคริสตัลในป่าเวทมนตร์")
+    col1, col2 = st.columns(2)
+    with col1:
+        size_option = st.selectbox(
+            "เลือกขนาดภาพ:",
+            ["แนวตั้ง (9:16) - TikTok/Reels", "แนวนอน (16:9) - FB/YouTube", "จัตุรัส (1:1) - IG/Profile"]
+        )
     
-    # --- ส่วนเลือกขนาดภาพ ---
-    st.subheader("📏 เลือกขนาดภาพ")
-    size_option = st.selectbox(
-        "เลือกขนาดให้เหมาะกับแพลตฟอร์ม:",
-        ["แนวตั้ง (9:16) - สำหรับ TikTok/Reels", "แนวนอน (16:9) - สำหรับ Facebook/YouTube", "จัตุรัส (1:1) - สำหรับ IG/Profile"]
-    )
-    
-    # กำหนดตัวเลข Width/Height (SDXL ทำงานได้ดีที่สุดที่ประมาณ 1 ล้านพิกเซล)
-    if "9:16" in size_option:
-        w, h = 768, 1344
-    elif "16:9" in size_option:
-        w, h = 1344, 768
-    else:
-        w, h = 1024, 1024
+    # กำหนดความกว้าง/สูง
+    if "9:16" in size_option: w, h = 768, 1344
+    elif "16:9" in size_option: w, h = 1344, 768
+    else: w, h = 1024, 1024
 
     if st.button("✨ เริ่มเสกรูป"):
-        if not hf_api_key:
-            st.error("กรุณาใส่ Hugging Face Token ก่อนนะคะ")
-        elif not img_desc:
-            st.warning("ใส่คำอธิบายภาพก่อนค่ะ")
+        hf_api_key = st.secrets.get("HUGGINGFACE_API_KEY")
+        if not img_desc:
+            st.warning("กรุณาใส่คำบรรยายภาพก่อนค่ะ")
+        elif not hf_api_key:
+            st.error("ไม่พบ Hugging Face API Key ค่ะ")
         else:
-            # ส่วนแปลภาษา (พร้อม Retry)
-            eng_prompt = ""
-            success_trans = False
-            for i in range(3):
-                try:
-                    with st.spinner(f"⏳ กำลังแปลภาษา... (ครั้งที่ {i+1})"):
-                        trans_res = model_text.generate_content(f"Translate to English image prompt: {img_desc}")
-                        eng_prompt = trans_res.text
-                        success_trans = True
-                        break
-                except Exception as e:
-                    if "429" in str(e) or "ResourceExhausted" in str(e):
-                        if i < 2:
-                            time.sleep(5)
-                        else:
-                            st.error("❌ โควต้าวันนี้เต็มจริงๆ ค่ะ รบกวนรอสักพักใหญ่ๆ นะคะ")
-                            st.stop()
+            # 1. แปลภาษา (ใช้ระบบสลับกุญแจ)
+            with st.spinner("⏳ กำลังใช้ Gemini แปลภาษาและปรับปรุง Prompt..."):
+                eng_prompt = call_gemini_with_retry(f"Generate a detailed English image prompt for: {img_desc}")
+                st.info(f"✅ Prompt ที่ใช้: {eng_prompt}")
             
-            # ส่วนวาดรูป
-            if success_trans and eng_prompt:
-                st.info(f"✅ แปลสำเร็จ: {eng_prompt}")
+            # 2. วาดรูป (ใช้ระบบ Retry)
+            with st.spinner("🎨 กำลังวาดรูปตามขนาดที่เลือก..."):
                 try:
-                    with st.spinner("🎨 กำลังวาดรูปตามขนาดที่เลือก..."):
-                        img_bytes = generate_image_with_retry(eng_prompt, w, h)
-                        image = Image.open(io.BytesIO(img_bytes))
-                        st.image(image, caption=f"ภาพขนาด {size_option} เสร็จแล้วค่ะ!", use_container_width=True)
-                        
-                        buf = io.BytesIO()
-                        image.save(buf, format="PNG")
-                        st.download_button("📥 ดาวน์โหลดรูป", data=buf.getvalue(), file_name="ai_image.png")
+                    img_bytes = generate_image_logic(eng_prompt, w, h, hf_api_key)
+                    image = Image.open(io.BytesIO(img_bytes))
+                    st.image(image, caption=f"ภาพขนาด {size_option} เสร็จแล้วค่ะ!", use_container_width=True)
+                    
+                    buf = io.BytesIO()
+                    image.save(buf, format="PNG")
+                    st.download_button("📥 ดาวน์โหลดรูป", data=buf.getvalue(), file_name="ai_image.png")
                 except Exception as e:
-                    st.error(f"❌ ขออภัยค่ะ: {e}")
+                    st.error(f"❌ เกิดข้อผิดพลาด: {e}")
 
-# --- ส่วนอื่นๆ ของแอปคงเดิม ---
+# --- เมนู: วางแผนคอนเทนต์ ---
 elif menu == "🎬 วางแผนคอนเทนต์":
-    st.header("🎬 วางแผนคอนเทนต์")
-    # ... โค้ดส่วนอื่นๆ ...
+    st.header("🎬 วางแผนคอนเทนต์ทุกแพลตฟอร์ม")
+    topic = st.text_input("หัวข้อคอนเทนต์")
+    if st.button("✨ วางแผน"):
+        with st.spinner("กำลังคิดแผนการโพสต์..."):
+            result = call_gemini_with_retry(f"วางแผนคอนเทนต์เรื่อง {topic} ให้เป็นมืออาชีพ")
+            st.markdown(result)
+
+# --- เมนู: เขียนแคปชั่นป้ายยา ---
+elif menu == "💰 เขียนแคปชั่นป้ายยา":
+    st.header("💰 เขียนแคปชั่นป้ายยา Affiliate")
+    details = st.text_area("ข้อมูลสินค้า")
+    if st.button("💸 เสกแคปชั่น"):
+        with st.spinner("กำลังเรียบเรียงคำพูด..."):
+            result = call_gemini_with_retry(f"เขียนแคปชั่นป้ายยาแรงๆ จากข้อมูลนี้: {details}")
+            st.code(result)
+
+# --- เมนู: ตั้งชื่อคลิปให้น่าคลิก ---
+elif menu == "🔍 ตั้งชื่อคลิปให้น่าคลิก":
+    st.header("🔍 ตัวช่วยตั้งชื่อให้คนกดดู")
+    topic_name = st.text_input("เนื้อหาคลิปสรุป")
+    if st.button("🚀 เสกชื่อคลิป"):
+        with st.spinner("กำลังคิดชื่อที่น่าสนใจ..."):
+            result = call_gemini_with_retry(f"คิดชื่อคลิป Viral 5 แบบ สำหรับเรื่อง {topic_name}")
+            st.markdown(result)
+
+# --- เมนู: ผู้ช่วยตอบคอมเมนต์ ---
+elif menu == "💬 ผู้ช่วยตอบคอมเมนต์":
+    st.header("💬 ผู้ช่วยตอบคอมเมนต์")
+    comment = st.text_area("คอมเมนต์จากแฟนคลับ")
+    style = st.select_slider("เลือกสไตล์", options=["สุภาพ", "เป็นกันเอง", "กวนๆ"])
+    if st.button("💭 คิดคำตอบ"):
+        with st.spinner("กำลังหาคำตอบที่โดนใจ..."):
+            result = call_gemini_with_retry(f"คิดคำตอบคอมเมนต์ '{comment}' สไตล์ {style}")
+            st.code(result)
