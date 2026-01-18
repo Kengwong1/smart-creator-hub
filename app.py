@@ -41,7 +41,7 @@ def call_gemini_with_retry(prompt_text):
 
 # --- 3. ฟังก์ชันเสกรูปพร้อมระบบ Auto-Retry และขนาดภาพ ---
 def generate_image_logic(prompt, width, height, hf_key, max_retries=5):
-    api_url = "https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-xl-base-1.0"
+   api_url = "https://api-inference.huggingface.co/models/runwayml/stable-diffusion-v1-5"
     headers = {"Authorization": f"Bearer {hf_key}"}
     payload = {
         "inputs": prompt,
