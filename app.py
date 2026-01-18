@@ -7,24 +7,24 @@ import urllib.parse
 from deep_translator import GoogleTranslator
 
 # --- 1. ตั้งค่าหน้าเว็บ ---
-st.set_page_config(page_title="Smart Creator Hub v4.3", page_icon="🎬", layout="wide")
+st.set_page_config(page_title="Smart Creator Hub v4.4", page_icon="🎬", layout="wide")
 load_dotenv()
 
-# --- 2. พจนานุกรมคีย์เวิร์ดวิเศษ (Style Presets) ---
+# --- 2. พจนานุกรมคีย์เวิร์ดวิเศษ (ปรับปรุงใหม่) ---
+# ถ้าเลือกสไตล์ปกติ ให้เติมคีย์เวิร์ดพื้นฐานให้ภาพสวยสมจริง
 STYLE_PRESETS = {
-    "สไตล์ปกติ (ตามใจ AI)": "",
+    "สไตล์ปกติ (สมจริงพื้นฐาน)": ", realistic, close-up shot, detailed texture, natural lighting, 8k photograph",
     "ช่างซ่อมยุคอวกาศ (Cyber Repair)": ", cyberpunk, intricate circuitry, neon internal glow, macro lens, 8k, futuristic workshop",
     "ฉากหลังสินค้า Affiliate (Studio)": ", soft cinematic studio lighting, minimalist marble stand, bokeh background, high-end commercial, clean aesthetic",
     "ไทยโมเดิร์น (พญานาค/ปลากัด)": ", Thai traditional Naga motif, iridescent scales, golden filigree, bioluminescent energy, digital art masterpiece",
-    "ภาพถ่ายสมจริง (Photorealistic)": ", hyper-realistic, shot on 85mm lens, sharp focus, natural textures, DSLR quality"
+    "ภาพถ่ายสมจริง (Photorealistic Pro)": ", hyper-realistic, shot on 85mm lens, sharp focus, natural textures, DSLR quality, cinematic grading"
 }
 
-# เครื่องปรุงรสพิเศษสำหรับระบบสำรอง
+# เครื่องปรุงรสพิเศษสำหรับระบบสำรอง (Super Backup Suffix)
+# เติมท้ายเสมอเมื่อใช้ Google Translate เพื่อประกันความสวย
 MAGIC_SAUCE = ", cinematic lighting, hyper-realistic, highly detailed, 8k, masterpiece, sharp focus"
 
-# --- 3. ฟังก์ชัน AI แปลภาษาและคิดเนื้อหา ---
-
-# สำหรับแปลภาษาเสกรูป (ระบบอมตะ 2 ชั้น)
+# --- 3. ฟังก์ชัน AI (เหมือน v4.3) ---
 def translate_for_image(text):
     keys = st.secrets.get("GEMINI_KEYS", [])
     for key in keys:
@@ -32,15 +32,15 @@ def translate_for_image(text):
             genai.configure(api_key=key)
             model = genai.GenerativeModel('gemini-flash-latest')
             res = model.generate_content(f"Translate to English image prompt: {text}")
+            # ถ้าใช้ Gemini แปล ไม่ต้องเติม MAGIC_SAUCE เพราะ Gemini เก่งอยู่แล้ว
             return res.text
         except: continue
-    # ถ้า Gemini เต็ม ใช้ Google Translate + เครื่องปรุงพิเศษ
+    # ถ้าใช้ Google Translate ต้องเติม MAGIC_SAUCE เสมอ
     try:
         translated = GoogleTranslator(source='th', target='en').translate(text)
         return translated + MAGIC_SAUCE
     except: return text + MAGIC_SAUCE
 
-# สำหรับคิดเนื้อหาไทย (ต้องใช้สมอง Gemini)
 def generate_thai_content(prompt_text):
     keys = st.secrets.get("GEMINI_KEYS", [])
     for key in keys:
@@ -54,21 +54,19 @@ def generate_thai_content(prompt_text):
 
 # --- 4. ฟังก์ชันสร้าง URL รูปภาพ ---
 def get_img_url(prompt, width, height, style_suffix):
+    # รวมคำสั่ง: คำแปล + สไตล์ที่เลือก
     full_prompt = prompt + style_suffix
     encoded = urllib.parse.quote(full_prompt)
     seed = int(time.time())
     return f"https://image.pollinations.ai/prompt/{encoded}?width={width}&height={height}&seed={seed}&nologo=true&model=flux"
 
-# --- 5. Sidebar เมนู (กลับมาครบแล้วค่ะ!) ---
+# --- 5. Sidebar เมนู ---
 with st.sidebar:
-    st.title("🎬 Smart Creator Hub v4.3")
+    st.title("🎬 Smart Creator Hub v4.4")
     st.write(f"สวัสดีค่ะคุณเก่ง ✨")
-    menu = st.radio(
-        "เลือกเครื่องมือ:", 
-        ["✨ Magic Content (ชุดใหญ่)", "🎨 เสกรูปภาพอย่างเดียว", "🎬 วางแผนคอนเทนต์", "💰 เขียนแคปชั่นป้ายยา", "🔍 ตั้งชื่อคลิป", "💬 ตอบคอมเมนต์"]
-    )
+    menu = st.radio("เลือกเครื่องมือ:", ["✨ Magic Content (ชุดใหญ่)", "🎨 เสกรูปภาพอย่างเดียว", "🎬 วางแผนคอนเทนต์", "💰 เขียนแคปชั่นป้ายยา", "🔍 ตั้งชื่อคลิป", "💬 ตอบคอมเมนต์"])
     st.divider()
-    st.caption("v4.3 | Complete Masterpiece Edition")
+    st.caption("v4.4 | Smart Default Style")
 
 # --- 6. โซนการทำงาน ---
 
@@ -94,11 +92,12 @@ if menu == "✨ Magic Content (ชุดใหญ่)":
                     # 2. เสกรูปหน้าปก
                     eng_p = translate_for_image(topic)
                     w, h = (540, 960) if "9:16" in chosen_size else (960, 540) if "16:9" in chosen_size else (768, 768)
-                    img_url = get_img_url(eng_p, w, h, STYLE_PRESETS[chosen_style])
+                    # ดึง suffix จาก dictionary มาใช้
+                    style_suffix = STYLE_PRESETS[chosen_style]
+                    img_url = get_img_url(eng_p, w, h, style_suffix)
                     
                     st.divider()
                     st.subheader("🖼️ ภาพหน้าปกคอนเทนต์")
-                    # จัดวางตรงกลาง
                     c1, c2, c3 = st.columns([1, 2, 1]) if "9:16" in chosen_size else st.columns([0.1, 5, 0.1])
                     with c2:
                         st.markdown(f'<div style="text-align:center;"><img src="{img_url}" style="width:100%; border-radius:15px; box-shadow: 0px 10px 30px rgba(0,0,0,0.3);"></div>', unsafe_allow_html=True)
@@ -108,7 +107,7 @@ if menu == "✨ Magic Content (ชุดใหญ่)":
                     st.markdown(text_res)
                     st.markdown(f'<div style="text-align:center; margin-top:20px;"><a href="{img_url}" target="_blank" style="padding:10px 20px; background-color:#FF4B4B; color:white; border-radius:8px; text-decoration:none; font-weight:bold;">📥 ดาวน์โหลดภาพหน้าปก</a></div>', unsafe_allow_html=True)
 
-# --- 6.2 เสกรูปอย่างเดียว ---
+# --- 6.2 เสกรูปอย่างเดียว (อัปเดตให้ใช้ logic เดียวกัน) ---
 elif menu == "🎨 เสกรูปภาพอย่างเดียว":
     st.header("🎨 AI ศิลปินเสกรูปภาพ (ระบบแปลไทยอมตะ)")
     img_desc = st.text_area("อยากได้รูปอะไรคะ? (พิมพ์ไทยได้เลย)", height=100)
@@ -118,21 +117,23 @@ elif menu == "🎨 เสกรูปภาพอย่างเดียว":
     with col_b: size = st.selectbox("เลือกขนาดภาพ:", ["แนวตั้ง (9:16)", "แนวนอน (16:9)", "จัตุรัส (1:1)"])
     
     if st.button("✨ เริ่มวาดรูป"):
-        with st.spinner("🎨 กำลังสร้างงานศิลปะ..."):
-            eng_prompt = translate_for_image(img_desc)
-            w, h = (540, 960) if "9:16" in size else (960, 540) if "16:9" in size else (768, 768)
-            final_url = get_img_url(eng_prompt, w, h, STYLE_PRESETS[style])
-            
-            # แสดงผลจัดกลาง
-            html_img = f'<div style="display:flex; justify-content:center;"><img src="{final_url}" style="max-width:100%; max-height:75vh; border-radius:12px; box-shadow:0px 8px 25px rgba(0,0,0,0.3);"></div>'
-            if "9:16" in size:
-                c1, c2, c3 = st.columns([1, 2, 1])
-                with c2: st.markdown(html_img, unsafe_allow_html=True)
-            else: st.markdown(html_img, unsafe_allow_html=True)
-            
-            st.markdown(f'<div style="text-align:center; margin-top:20px;"><a href="{final_url}" target="_blank" style="padding:10px 20px; background-color:#FF4B4B; color:white; border-radius:8px; text-decoration:none;">📥 ดาวน์โหลดรูปภาพ</a></div>', unsafe_allow_html=True)
+        if not img_desc: st.warning("ใส่คำบรรยายก่อนนะคะ")
+        else:
+            with st.spinner("🎨 กำลังสร้างงานศิลปะ..."):
+                eng_prompt = translate_for_image(img_desc)
+                w, h = (540, 960) if "9:16" in size else (960, 540) if "16:9" in size else (768, 768)
+                style_suffix = STYLE_PRESETS[style]
+                final_url = get_img_url(eng_prompt, w, h, style_suffix)
+                
+                html_img = f'<div style="display:flex; justify-content:center;"><img src="{final_url}" style="max-width:100%; max-height:75vh; border-radius:12px; box-shadow:0px 8px 25px rgba(0,0,0,0.3);"></div>'
+                if "9:16" in size:
+                    c1, c2, c3 = st.columns([1, 2, 1])
+                    with c2: st.markdown(html_img, unsafe_allow_html=True)
+                else: st.markdown(html_img, unsafe_allow_html=True)
+                
+                st.markdown(f'<div style="text-align:center; margin-top:20px;"><a href="{final_url}" target="_blank" style="padding:10px 20px; background-color:#FF4B4B; color:white; border-radius:8px; text-decoration:none;">📥 ดาวน์โหลดรูปภาพ</a></div>', unsafe_allow_html=True)
 
-# --- หมวดหมู่อื่นๆ ---
+# (เมนูอื่นๆ คงเดิม)
 elif menu == "🎬 วางแผนคอนเทนต์":
     st.header("🎬 วางแผนสคริปต์คอนเทนต์")
     topic = st.text_input("หัวข้อที่ต้องการวางแผน:")
