@@ -7,11 +7,10 @@ import urllib.parse
 from deep_translator import GoogleTranslator
 
 # --- 1. ตั้งค่าหน้าเว็บ ---
-st.set_page_config(page_title="Smart Creator Hub v4.7", page_icon="🎬", layout="wide")
+st.set_page_config(page_title="Smart Creator Hub v4.8", page_icon="🎬", layout="wide")
 load_dotenv()
 
 # --- 2. สไตล์ภาพ (Visual Presets) ---
-# ปรับ Prompt ให้บังคับเห็นมือคน (Human Hands) ชัดเจน
 STYLE_PRESETS = {
     "สไตล์ปกติ (สมจริงพื้นฐาน)": ", real human hands repairing smartphone, close-up photography, authentic tools, detailed screen, 8k, sharp focus, no robots",
     "ช่างซ่อมยุคอวกาศ (Cyber Repair)": ", cyberpunk workshop, neon glowing circuits, detailed mechanical arms repairing phone, 8k cinematic",
@@ -23,7 +22,6 @@ STYLE_PRESETS = {
 # --- 3. ระบบ AI และแปลภาษา ---
 def translate_visual(text):
     keys = st.secrets.get("GEMINI_KEYS", [])
-    # Prompt บังคับให้ Gemini แปลเป็นภาพถ่ายจริง
     sys_prompt = f"Convert this topic into a detailed photography prompt about: {text}. Must include 'technician hands', 'smartphone parts', 'tools'. Realistic style, not cartoon."
     for key in keys:
         try:
@@ -32,7 +30,6 @@ def translate_visual(text):
             res = model.generate_content(sys_prompt)
             return res.text
         except: continue
-    # ตัวแปลสำรอง
     try:
         return GoogleTranslator(source='th', target='en').translate(text) + ", real human hands, smartphone repair, photorealistic, 8k"
     except: return text
@@ -53,18 +50,19 @@ def get_img_url(prompt, width, height, style_suffix):
     full_prompt = prompt + style_suffix
     encoded = urllib.parse.quote(full_prompt)
     seed = int(time.time())
+    # ใช้ nologo=true เพื่อลบโลโก้ และ model=flux
     return f"https://image.pollinations.ai/prompt/{encoded}?width={width}&height={height}&seed={seed}&nologo=true&model=flux"
 
-# --- 5. Sidebar เมนู (กลับมาครบ 6 เมนู) ---
+# --- 5. Sidebar เมนู ---
 with st.sidebar:
-    st.title("🎬 Smart Creator Hub v4.7")
+    st.title("🎬 Smart Creator Hub v4.8")
     st.write(f"สวัสดีค่ะคุณเก่ง ✨")
     menu = st.radio(
         "เลือกเครื่องมือ:", 
         ["✨ Magic Content (ชุดใหญ่)", "🎨 เสกรูปภาพอย่างเดียว", "🎬 วางแผนคอนเทนต์", "💰 เขียนแคปชั่นป้ายยา", "🔍 ตั้งชื่อคลิป", "💬 ตอบคอมเมนต์"]
     )
     st.divider()
-    st.caption("v4.7 | Final Fix")
+    st.caption("v4.8 | Safety Display Fix")
 
 # --- 6. โซนการทำงาน ---
 
@@ -93,16 +91,16 @@ if menu == "✨ Magic Content (ชุดใหญ่)":
                     st.divider()
                     st.subheader("🖼️ ภาพหน้าปกคอนเทนต์")
                     
-                    # ใช้ st.image แบบมาตรฐานเพื่อให้ชัวร์ว่ารูปขึ้นแน่นอน
-                    # จัดกลางด้วย Columns ง่ายๆ
+                    # --- ใช้ st.image แบบพื้นฐานที่สุด เพื่อความชัวร์ 100% ---
                     if "9:16" in chosen_size:
-                        c1, c2, c3 = st.columns([1, 1, 1])
+                        c1, c2, c3 = st.columns([1, 1, 1]) # จัดกลาง
                         with c2:
                             st.image(img_url, use_container_width=True)
-                            st.markdown(f'[📥 **ดาวน์โหลดภาพหน้าปก**]({img_url})')
                     else:
                         st.image(img_url, use_container_width=True)
-                        st.markdown(f'[📥 **ดาวน์โหลดภาพหน้าปก**]({img_url})')
+                    
+                    # ปุ่มดาวน์โหลดแบบธรรมดา (ปลอดภัยกว่า)
+                    st.markdown(f"**[📥 คลิกเพื่อดาวน์โหลดภาพขนาดเต็ม]({img_url})**")
                     
                     st.divider()
                     st.subheader("📝 รายละเอียดคอนเทนต์")
@@ -127,7 +125,7 @@ elif menu == "🎨 เสกรูปภาพอย่างเดียว":
                 with c2: st.image(img_url, use_container_width=True)
             else:
                 st.image(img_url, use_container_width=True)
-            st.markdown(f'[📥 **ดาวน์โหลดรูปภาพ**]({img_url})')
+            st.markdown(f"**[📥 คลิกเพื่อดาวน์โหลดภาพขนาดเต็ม]({img_url})**")
 
 # --- 6.3 - 6.6 เมนูย่อยอื่นๆ ---
 elif menu == "🎬 วางแผนคอนเทนต์":
