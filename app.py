@@ -5,55 +5,60 @@ import google.generativeai as genai
 import re
 
 # --- 1. SETUP ---
-st.set_page_config(page_title="Creator Hub v13.6", page_icon="🎨", layout="centered")
+st.set_page_config(page_title="Creator Hub v13.7", page_icon="⚡", layout="centered")
 
-# ระบบจำสถานะ (Session State)
-if 'selected_style' not in st.session_state:
-    st.session_state.selected_style = "Cinematic Realistic"
-
+# เตรียมระบบแปล (แต่รอบนี้เราจะไม่พึ่งมัน 100%)
 try:
-    # เช็กกุญแจ Gemini
     genai.configure(api_key=st.secrets["GEMINI_KEYS"])
     model_gemini = genai.GenerativeModel('gemini-pro')
-except Exception as e:
+    gemini_ready = True
+except:
     model_gemini = None
-    st.error(f"⚠️ ระบบแปลภาษาขัดข้อง: {e}")
+    gemini_ready = False
 
-# --- 2. FAST ENGINE ---
+# --- 2. SMART FUNCTIONS ---
 def contains_thai(text):
     return bool(re.search('[ก-ฮ]', text))
 
-def expand_prompt(text, style):
-    if not model_gemini: return text
-    # ปรับคำสั่งให้ Gemini ตอบไวที่สุด (Short & Sharp)
-    prompt = f"English image prompt for: {text}. Style: {style}. 10 words max."
+def safe_translate(text, style):
+    # ถ้า Gemini ไม่พร้อม หรือ user ปิดการใช้งาน ให้ส่งคืนค่าเดิมทันที (ไม่รอ)
+    if not gemini_ready: return text
+    
     try:
+        # สั่งแปลแบบด่วน
+        prompt = f"Translate this to English prompt for image generation: '{text}'. Style: {style}. Keep it short."
         response = model_gemini.generate_content(prompt)
         return response.text.strip()
-    except:
+    except Exception as e:
+        # ถ้า Error ให้คืนค่าเดิมทันที (อย่าหมุนค้าง)
         return text
 
 # --- 3. MAIN UI ---
-st.title("🎨 AI เนรมิตภาพ (v13.6: No More Lag)")
+st.title("🎨 AI สร้างภาพ (v13.7: แก้หมุนค้าง)")
 
 with st.sidebar:
     st.header("⚙️ ตั้งค่า")
+    # ปุ่มวิเศษ! ถ้าหมุนนาน ให้ติ๊กออกเลยค่ะ
+    enable_translation = st.checkbox("เปิดล่ามแปลภาษา (Gemini)", value=True, help="ถ้าหมุนนานให้ปิดตัวนี้ แล้วพิมพ์อังกฤษเอง")
+    
     model_choice = st.radio("โหมด:", ["turbo (ไว)", "flux (สวย)"], index=0)
     size_choice = st.selectbox("สัดส่วน:", ["แนวตั้ง (9:16)", "แนวนอน (16:9)", "จัตุรัส (1:1)"])
-    st.divider()
-    if st.button("🔄 รีเซ็ตแอป"): st.rerun()
 
-# ส่วนเลือกสไตล์ด่วน (แสดงผลชัดเจนว่าเลือกอะไรอยู่)
-st.subheader(f"✨ สไตล์ปัจจุบัน: {st.session_state.selected_style}")
-style_col = st.columns(3)
-with style_col[0]:
-    if st.button("📸 Realistic"): st.session_state.selected_style = "Hyper-realistic Photography"
-with style_col[1]:
-    if st.button("🏮 Anime"): st.session_state.selected_style = "Detailed Japanese Anime"
-with style_col[2]:
-    if st.button("🎨 Digital Art"): st.session_state.selected_style = "Oil Painting Digital Art"
+# เลือกสไตล์
+st.subheader("✨ สไตล์ภาพ:")
+c1, c2, c3 = st.columns(3)
+if 'style' not in st.session_state: st.session_state.style = "Realistic"
 
-user_input = st.text_input("พิมพ์สิ่งที่ต้องการ:", placeholder="เช่น แมวขี่มอเตอร์ไซค์")
+with c1: 
+    if st.button("📸 จริง"): st.session_state.style = "Hyper-realistic"
+with c2: 
+    if st.button("🏮 อนิเมะ"): st.session_state.style = "Anime"
+with c3: 
+    if st.button("🎨 ศิลปะ"): st.session_state.style = "Digital Art"
+
+st.caption(f"กำลังใช้สไตล์: {st.session_state.style}")
+
+user_input = st.text_input("พิมพ์คำสั่ง (ถ้าปิดล่าม ต้องพิมพ์อังกฤษนะ):", placeholder="เช่น cat, dog, beautiful girl")
 
 # ล็อกขนาด
 if "9:16" in size_choice: w, h = 720, 1280
@@ -62,26 +67,33 @@ else: w, h = 1024, 1024
 
 if st.button("🚀 เนรมิตภาพ"):
     if user_input:
-        # ใช้ placeholder เพื่อล้างภาพเก่าออกก่อน จะได้ไม่สับสนว่าค้างไหมค่ะ
-        image_placeholder = st.empty()
+        final_p = user_input
         
-        with st.status("🚀 กำลังทำงาน...", expanded=True) as status:
-            # ขั้นตอน 1: แปล
-            st.write("🛰️ กำลังแปลภาษา (Gemini thinking...)")
-            final_p = expand_prompt(user_input, st.session_state.selected_style)
-            
-            # ขั้นตอน 2: เจนภาพ
-            st.write(f"🎨 กำลังวาด: {final_p}")
-            seed = random.randint(1, 10**6)
-            encoded = urllib.parse.quote(final_p)
-            selected_model = model_choice.split(" ")[0]
-            image_url = f"https://image.pollinations.ai/prompt/{encoded}?width={w}&height={h}&model={selected_model}&nologo=true&seed={seed}"
-            
-            # แสดงผล
-            image_placeholder.markdown(f'<img src="{image_url}" width="100%" style="border-radius: 15px; border: 2px solid #ff4b4b;">', unsafe_allow_html=True)
-            
-            status.update(label="✅ วาดเสร็จแล้วค่ะ!", state="complete", expanded=False)
-            st.caption(f"Prompt ที่ใช้: {final_p}")
-            st.markdown(f'[📥 ดาวน์โหลดภาพขนาดเต็ม]({image_url})')
+        # 1. ระบบแปลภาษา (ทำงานเมื่อ User เปิดปุ่ม และมีภาษาไทย)
+        if enable_translation and contains_thai(user_input):
+            with st.status("🛰️ กำลังแปลภาษา...", expanded=True) as status:
+                try:
+                    translated = safe_translate(user_input, st.session_state.style)
+                    if translated != user_input:
+                        final_p = translated
+                        status.update(label="✅ แปลเสร็จแล้ว!", state="complete")
+                    else:
+                        status.update(label="⚠️ แปลไม่ได้ ใช้ข้อความเดิม", state="error")
+                except:
+                    final_p = user_input
+                    status.update(label="❌ ข้ามการแปล (ระบบขัดข้อง)", state="error")
+        
+        # 2. สร้างภาพทันที (ไม่รออะไรทั้งนั้น)
+        st.write(f"🎨 กำลังวาด: **{final_p}**")
+        
+        seed = random.randint(1, 10**6)
+        encoded = urllib.parse.quote(final_p)
+        selected_model = model_choice.split(" ")[0]
+        image_url = f"https://image.pollinations.ai/prompt/{encoded}?width={w}&height={h}&model={selected_model}&nologo=true&seed={seed}"
+        
+        # HTML Injection เพื่อความไวสูงสุด
+        st.markdown(f'<img src="{image_url}" width="100%" style="border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">', unsafe_allow_html=True)
+        st.markdown(f'[📥 ดาวน์โหลดภาพ]({image_url})')
+        
     else:
-        st.warning("กรุณาใส่ไอเดียก่อนนะคะ")
+        st.warning("ใส่ไอเดียก่อนนะคะ")
