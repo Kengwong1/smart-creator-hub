@@ -20,17 +20,17 @@ def init_db():
 conn = init_db()
 c = conn.cursor()
 
-# --- 2. AI IMAGE GENERATION (ระบบ Never-Fail) ---
-def generate_image_v2(prompt_text):
-    # เข้ารหัสข้อความเพื่อให้ส่งผ่าน URL ได้ (ป้องกันปัญหาเว้นวรรค)
-    encoded_prompt = urllib.parse.quote(prompt_text)
+# --- 2. AI IMAGE GENERATION (v12.6: ปรับขนาด + โมเดลชัด) ---
+def generate_image_v3(prompt_text, width, height):
+    # เพิ่มคำสั่งลับเพื่อให้ภาพชัดขึ้น
+    enhanced_prompt = f"{prompt_text}, highly detailed face, realistic, sharp focus, 8k uhd"
+    encoded_prompt = urllib.parse.quote(enhanced_prompt)
     
-    # ใช้เครื่องยนต์ Pollinations.ai (เร็ว สวย และฟรี 100%)
-    # เราสามารถเลือกสไตล์ได้ เช่น &model=flux หรือ &model=turbo
-    url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1024&height=1024&nologo=true&seed={pd.Timestamp.now().microsecond}"
+    # ใช้โมเดล 'flux' ที่ให้รายละเอียดสมจริง และกำหนดขนาดตามที่เลือก
+    url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width={width}&height={height}&model=flux&nologo=true&seed={pd.Timestamp.now().microsecond}"
     
     try:
-        response = requests.get(url, timeout=30)
+        response = requests.get(url, timeout=45)
         if response.status_code == 200:
             return Image.open(io.BytesIO(response.content)), "OK"
         else:
@@ -39,36 +39,53 @@ def generate_image_v2(prompt_text):
         return None, str(e)
 
 # --- 3. CONFIG ---
-st.set_page_config(page_title="Creator Hub v12.5 (Never-Fail)", page_icon="🎨", layout="wide")
+st.set_page_config(page_title="Creator Hub v12.6", page_icon="🎨", layout="wide")
 
 # --- 4. SIDEBAR ---
 with st.sidebar:
-    st.title("🚀 Creator Hub v12.5")
-    menu = st.selectbox("เครื่องมือ:", ["🎨 AI สร้างภาพ (Engine 2026)", "💡 คลังไอเดีย", "🔗 คลังลิงก์", "📱 แฮชแท็ก", "💬 สคริปต์แชท", "✅ Checklist"])
+    st.title("🚀 Creator Hub v12.6")
+    menu = st.selectbox("เครื่องมือ:", ["🎨 AI สร้างภาพ (ชัด+เลือกไซส์)", "💡 คลังไอเดีย", "🔗 คลังลิงก์", "📱 แฮชแท็ก", "💬 สคริปต์แชท", "✅ Checklist"])
     st.divider()
-    st.success("โหมด: ไร้ Error 410 🛡️")
+    st.success("โหมด: ภาพชัด หน้าไม่เละ ✨")
 
 # --- 5. FUNCTIONALITY ---
 
-if menu == "🎨 AI สร้างภาพ (Engine 2026)":
-    st.header("🎨 AI เนรมิตภาพสวย (ไม่ต้องใช้กุญแจ)")
-    st.info("ระบบเวอร์ชันนี้ใช้ Super-Engine ตัวใหม่ รับรองว่าภาพขึ้น 100% ค่ะ")
+if menu == "🎨 AI สร้างภาพ (ชัด+เลือกไซส์)":
+    st.header("🎨 AI เนรมิตภาพ (ควบคุมได้ดั่งใจ)")
     
-    prompt = st.text_area("อยากให้วาดอะไร (ภาษาอังกฤษ):", placeholder="เช่น: A luxury car on a mountain road, sunset, realistic")
+    col1, col2 = st.columns([2, 1])
     
-    if st.button("✨ เริ่มสร้างภาพทันที"):
+    with col1:
+        prompt = st.text_area("อยากให้วาดอะไร (ภาษาอังกฤษ):", placeholder="เช่น: Iron Man portrait, futuristic city background", height=150)
+    
+    with col2:
+        st.write("📐 **เลือกสัดส่วนภาพ:**")
+        aspect_ratio = st.radio(
+            "สัดส่วน:",
+            ("จัตุรัส (Square 1:1)", "แนวตั้ง (Portrait 2:3)", "แนวนอน (Landscape 16:9)"),
+            index=0
+        )
+        
+        # กำหนดขนาดตามที่เลือก
+        if "Square" in aspect_ratio:
+            w, h = 768, 768
+        elif "Portrait" in aspect_ratio:
+            w, h = 512, 768
+        else: # Landscape
+            w, h = 1024, 576
+
+    if st.button("✨ เริ่มสร้างภาพ (แบบคมชัด)"):
         if prompt:
-            with st.spinner("⏳ กำลังวาดภาพให้คุณเก่งอย่างไว..."):
-                img, msg = generate_image_v2(prompt)
+            with st.spinner("⏳ กำลังวาดภาพแบบละเอียด... รอสักครู่นะครับ"):
+                img, msg = generate_image_v3(prompt, w, h)
                 if img:
-                    st.image(img, caption="ผลงานจาก Engine 2026 ค่ะ", use_container_width=True)
-                    # ปุ่มดาวน์โหลด
+                    st.image(img, caption=f"สัดส่วน: {aspect_ratio}", use_container_width=True)
                     buf = io.BytesIO()
                     img.save(buf, format="PNG")
-                    st.download_button("📥 ดาวน์โหลดภาพ", buf.getvalue(), "ai_art.png", "image/png")
+                    st.download_button("📥 ดาวน์โหลดภาพ", buf.getvalue(), "ai_image_v12.6.png", "image/png")
                 else:
-                    st.error(f"เกิดปัญหาเล็กน้อย: {msg}")
+                    st.error(f"เกิดปัญหา: {msg}")
         else:
-            st.warning("กรุณาพิมพ์คำสั่งก่อนนะค่ะ")
+            st.warning("กรุณาพิมพ์คำสั่งก่อนนะครับ")
 
-# (ส่วนเมนูอื่นๆ 💡, 🔗, 📱, 💬, ✅ ใส่ต่อท้ายให้ครบเหมือน v12.3 นะคะ)
+# (ส่วนเมนูอื่นๆ 💡, 🔗, 📱, 💬, ✅ ใส่ต่อท้ายให้ครบเหมือนเดิมนะครับ)
