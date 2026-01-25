@@ -3,24 +3,22 @@ import random
 import urllib.parse
 import google.generativeai as genai
 import re
+from PIL import Image
+import requests
+from io import BytesIO
 
 # --- 1. CONFIG ---
-st.set_page_config(page_title="SME Pro Studio v15.1", page_icon="🧼", layout="centered")
+st.set_page_config(page_title="SME Pro Studio v16.0", page_icon="🛍️", layout="wide") # เปลี่ยนเป็น wide เพื่อให้ทำงานง่าย
 
-# --- 2. BACKEND: PROMPT ENGINEERING (สูตรลับช่างภาพ) ---
+# --- 2. LOGIC ---
 THEMES = {
-    "✨ หรูหรา (Luxury)": "placed on a black marble table, golden lighting, elegant atmosphere, bokeh background, high-end product photography",
-    "🌿 ธรรมชาติ (Organic)": "placed on a natural stone, surrounded by green leaves and water ripples, soft sunlight, organic style, fresh feeling",
-    "⚪ มินิมอล (Minimal)": "placed on a clean white podium, soft pastel background, studio lighting, minimal aesthetic, clean composition",
-    "🏮 ตรุษจีน/มงคล (Chinese New Year)": "red background with gold accents, chinese lanterns, festive atmosphere, lucky style, bright lighting",
-    "🏙️ นีออน (Cyberpunk)": "neon lights background, blue and pink lighting, futuristic product shot, reflection on glass floor"
+    "✨ หรูหรา (Luxury)": "placed on a black marble table, golden lighting, elegant atmosphere, bokeh background",
+    "🌿 ธรรมชาติ (Organic)": "placed on a natural stone, surrounded by green leaves, soft sunlight, organic style",
+    "⚪ มินิมอล (Minimal)": "placed on a clean white podium, soft pastel background, studio lighting, minimal aesthetic",
+    "🏙️ นีออน (Cyberpunk)": "neon lights background, blue and pink lighting, futuristic product shot"
 }
 
-LOCAL_DICT = {
-    "สบู่": "soap bar", "ครีม": "cream jar", "เซรั่ม": "serum bottle", 
-    "ลิปสติก": "lipstick", "กาแฟ": "coffee cup", "เสื้อ": "t-shirt",
-    "กระเป๋า": "handbag", "รองเท้า": "sneakers", "น้ำหอม": "perfume bottle"
-}
+LOCAL_DICT = {"สบู่": "soap bar", "ครีม": "cream jar", "เซรั่ม": "serum bottle", "น้ำหอม": "perfume bottle"}
 
 try:
     genai.configure(api_key=st.secrets["GEMINI_KEYS"])
@@ -30,69 +28,99 @@ except:
     gemini_ready = False
 
 def create_pro_prompt(product_input, theme_key):
-    # 1. แปลคำศัพท์
     product_eng = product_input
     for thai, eng in LOCAL_DICT.items():
         if thai in product_eng: product_eng = product_eng.replace(thai, eng)
     
-    if bool(re.search('[ก-ฮ]', product_eng)) and gemini_ready:
-        try:
-            response = model_gemini.generate_content(f"Translate product name to English: {product_eng}")
-            product_eng = response.text.strip()
-        except:
-            pass
-
-    # 2. --- จุดแก้สำคัญ (v15.1 Shape Fixer) ---
-    # ถ้าเป็นสบู่ ให้เพิ่มคำสั่งบังคับทรงสี่เหลี่ยมสมมาตร
+    # เพิ่มคำสั่ง: ห้ามมีตัวหนังสือ (no text) เพื่อให้เราเอาโลโก้ไปแปะง่ายๆ
     shape_fix = ""
     if "soap" in product_eng.lower():
-        shape_fix = ", perfectly shaped rectangular bar, symmetrical form, sharp edges, clean uniform shape"
-
-    # 3. ผสมสูตร
+        shape_fix = ", perfectly shaped rectangular bar, symmetrical form"
+    
     theme_prompt = THEMES[theme_key]
-    # เอา shape_fix ไปวางต่อท้ายชื่อสินค้าทันที
-    full_prompt = f"Professional product photography of {product_eng}{shape_fix}, {theme_prompt}, 8k resolution, sharp focus, commercial advertisement"
-    return full_prompt, product_eng
+    full_prompt = f"Professional product photography of {product_eng}{shape_fix}, {theme_prompt}, blank product surface, no text, no label, 8k resolution"
+    return full_prompt
+
+# ฟังก์ชันโหลดภาพจาก URL มาเป็นภาพที่แก้ไขได้
+def load_image_from_url(url):
+    response = requests.get(url)
+    img = Image.open(BytesIO(response.content))
+    return img
 
 # --- 3. UI ---
-st.title("🛍️ SME Pro Studio (v15.1: แก้ทรงสบู่)")
-st.caption("เพิ่มระบบล็อกรูปทรงสบู่ให้ตรงเป๊ะ ไม่เบี้ยว")
+st.title("🛍️ SME Pro Studio (v16.0: แปะโลโก้ได้เลย!)")
 
-with st.sidebar:
-    st.header("📸 ตั้งค่าสตูดิโอ")
-    size_choice = st.selectbox("ขนาดภาพ:", ["สี่เหลี่ยม (IG/Shopee)", "แนวตั้ง (TikTok/Reels)", "แนวนอน (FB Cover)"])
-    selected_theme = st.selectbox("เลือกบรรยากาศร้าน:", list(THEMES.keys()))
+col1, col2 = st.columns([1, 2])
 
-user_product = st.text_input("สินค้าของคุณคืออะไร:", placeholder="เช่น สบู่สมุนไพร, ขวดน้ำหอม")
+with col1:
+    st.header("1. สร้างภาพสินค้า")
+    selected_theme = st.selectbox("เลือกธีม:", list(THEMES.keys()))
+    user_product = st.text_input("สินค้า:", placeholder="เช่น สบู่, ขวดครีม")
+    
+    if st.button("✨ สร้างภาพพื้นหลัง"):
+        if user_product:
+            with st.spinner("กำลังจัดแสงและถ่ายภาพ..."):
+                final_prompt = create_pro_prompt(user_product, selected_theme)
+                seed = random.randint(1, 999999)
+                encoded = urllib.parse.quote(final_prompt)
+                # ใช้ Flux เพื่อความสวย
+                image_url = f"https://image.pollinations.ai/prompt/{encoded}?width=1024&height=1024&model=flux&nologo=true&seed={seed}"
+                
+                # โหลดภาพเก็บไว้ใน Session State (ความจำชั่วคราว)
+                st.session_state.generated_image = load_image_from_url(image_url)
+                st.success("ได้ภาพแล้ว! ไปขั้นตอนที่ 2 เพื่อแปะโลโก้")
 
-if "แนวตั้ง" in size_choice: w, h = 720, 1280
-elif "แนวนอน" in size_choice: w, h = 1280, 720
-else: w, h = 1024, 1024
-
-if st.button("✨ ถ่ายรูปสินค้าทันที"):
-    if user_product:
-        # สร้าง Prompt
-        final_prompt, eng_name = create_pro_prompt(user_product, selected_theme)
+with col2:
+    st.header("2. แปะโลโก้ (Brand)")
+    
+    # ถ้ามีภาพที่สร้างเสร็จแล้ว ให้แสดงเครื่องมือแต่งภาพ
+    if 'generated_image' in st.session_state:
+        # ส่วนอัปโหลดโลโก้
+        uploaded_logo = st.file_uploader("อัปโหลดโลโก้ (พื้นใส PNG ดีที่สุด)", type=["png", "jpg", "jpeg"])
         
-        # สร้าง URL (ใช้ Flux)
-        seed = random.randint(1, 999999)
-        encoded = urllib.parse.quote(final_prompt)
-        image_url = f"https://image.pollinations.ai/prompt/{encoded}?width={w}&height={h}&model=flux&nologo=true&seed={seed}"
+        # แสดงภาพพื้นหลัง (Product)
+        bg_image = st.session_state.generated_image.copy() # ก๊อปปี้มาเพื่อไม่ให้ภาพต้นฉบับเสีย
         
-        # แสดงผล
-        st.success(f"📸 กำลังถ่ายภาพ: **{user_product}** (ระบบล็อกทรงแล้ว)")
-        st.caption(f"🔒 Prompt ที่ใช้: ...{eng_name}, perfectly shaped rectangular bar, symmetrical...")
-
-        st.markdown(f'''
-            <a href="{image_url}" target="_blank">
-                <button style="background-color: #28a745; color: white; padding: 15px; width: 100%; border: none; border-radius: 10px; font-size: 18px; cursor: pointer;">
-                    🚀 คลิกเพื่อดูภาพสินค้าขนาดใหญ่ (High Quality)
-                </button>
-            </a>
-        ''', unsafe_allow_html=True)
+        if uploaded_logo:
+            # โหลดโลโก้
+            logo = Image.open(uploaded_logo)
+            
+            # --- เครื่องมือปรับแต่ง (Sliders) ---
+            st.write("🎛️ ปรับตำแหน่งโลโก้:")
+            c1, c2, c3 = st.columns(3)
+            with c1: logo_size = st.slider("ขนาด", 10, 500, 150)
+            with c2: x_pos = st.slider("ซ้าย-ขวา", 0, 1024, 512)
+            with c3: y_pos = st.slider("บน-ล่าง", 0, 1024, 512)
+            
+            # ปรับขนาดโลโก้
+            logo.thumbnail((logo_size, logo_size))
+            
+            # แปะโลโก้ลงบนภาพ (Paste)
+            # ต้องคำนวณตำแหน่งกึ่งกลางให้เป๊ะ
+            bg_w, bg_h = bg_image.size
+            logo_w, logo_h = logo.size
+            offset = (x_pos - logo_w//2, y_pos - logo_h//2)
+            
+            # แปะแบบพื้นใส (Transparency Mask)
+            try:
+                bg_image.paste(logo, offset, logo)
+            except:
+                # กรณีไฟล์โลโก้ไม่มีพื้นใส (JPG) ให้แปะทับเลย
+                bg_image.paste(logo, offset)
         
-        st.caption("👇 ตัวอย่าง (ถ้าเน็ตแรงจะขึ้นตรงนี้):")
-        st.markdown(f'<img src="{image_url}" width="100%" style="border-radius:10px;">', unsafe_allow_html=True)
+        # แสดงผลลัพธ์สุดท้าย
+        st.image(bg_image, caption="ภาพสินค้าพร้อมขาย", use_container_width=True)
         
+        # ปุ่มดาวน์โหลด (แปลงภาพเป็นปุ่มให้กด)
+        buf = BytesIO()
+        bg_image.save(buf, format="PNG")
+        byte_im = buf.getvalue()
+        
+        st.download_button(
+            label="📥 ดาวน์โหลดภาพนี้ไปขายของ!",
+            data=byte_im,
+            file_name="my_product_final.png",
+            mime="image/png"
+        )
     else:
-        st.warning("กรุณาพิมพ์ชื่อสินค้าก่อนนะคะ")
+        st.info("👈 กรุณาสร้างภาพที่ฝั่งซ้ายก่อนนะครับ")
