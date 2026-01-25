@@ -6,75 +6,78 @@ import urllib.parse
 import random
 import google.generativeai as genai
 
-# --- 1. SETUP & SECRETS ---
-st.set_page_config(page_title="Creator Hub v12.9", page_icon="🎨", layout="centered")
+# --- 1. SETUP & UI CONFIG ---
+st.set_page_config(page_title="Creator Hub v13.0", page_icon="⚡", layout="centered")
 
+# ดึงกุญแจสำหรับล่ามแปลภาษา
 try:
-    # ดึงกุญแจที่มีอยู่แล้วมาใช้เป็นล่ามแปลภาษาครับ
     genai.configure(api_key=st.secrets["GEMINI_KEYS"])
     model_gemini = genai.GenerativeModel('gemini-pro')
 except:
     model_gemini = None
 
-# --- 2. FUNCTION: ล่ามแปลไทย -> อังกฤษ ---
-def translate_prompt(text):
-    if not model_gemini: return text
+# --- 2. FAST FUNCTIONS ---
+def fast_translate(text):
+    if not model_gemini or not text: return text
     try:
-        response = model_gemini.generate_content(f"Translate this Thai image prompt to English: {text}")
-        return response.text
+        # สั่งให้แปลแบบสั้นที่สุดเพื่อประหยัดเวลา
+        response = model_gemini.generate_content(f"Translate to English (short): {text}")
+        return response.text.strip()
     except:
         return text
 
-# --- 3. FUNCTION: ENGINE สร้างภาพ (v12.9: Anti-Ban) ---
-def generate_image_v6(prompt_text, width, height, model_type):
-    encoded_prompt = urllib.parse.quote(prompt_text)
-    # สุ่มเลข Seed ทุกครั้งแบบมหาศาลเพื่อเลี่ยงการโดนจำ IP
-    random_seed = random.randint(1, 999999999)
-    url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width={width}&height={height}&model={model_type}&nologo=true&seed={random_seed}"
+def quick_generate(prompt_text, width, height, model):
+    encoded = urllib.parse.quote(prompt_text)
+    seed = random.randint(1, 10**9)
+    # ใช้ URL ตรงเข้า Engine เพื่อความเร็ว
+    url = f"https://image.pollinations.ai/prompt/{encoded}?width={width}&height={height}&model={model}&nologo=true&seed={seed}"
     
     try:
-        response = requests.get(url, timeout=45)
-        if response.status_code == 200:
-            return Image.open(io.BytesIO(response.content)), "OK"
-        elif response.status_code == 429:
-            return None, "โดนจำกัดจำนวน (Rate Limit) รอ 1-2 นาทีนะครับ"
-        else:
-            return None, f"Error: {response.status_code}"
+        r = requests.get(url, timeout=30)
+        if r.status_code == 200:
+            return Image.open(io.BytesIO(r.content))
+        return None
     except:
-        return None, "การเชื่อมต่อขัดข้อง"
+        return None
 
-# --- 4. INTERFACE ---
-st.title("🎨 AI เนรมิตภาพ (แปลไทยได้ + กันแบน)")
+# --- 3. MAIN INTERFACE ---
+st.title("⚡ AI วาดภาพด่วน (v13.0)")
 
-with st.expander("⚙️ ตั้งค่าขนาดและโหมด"):
-    mode = st.radio("🚀 โหมด:", ["เน้นสวย (Flux)", "เน้นไว (Turbo)"], index=1) # ค่าเริ่มต้นเป็น Turbo เพื่อความไว
-    target_size = st.selectbox("เลือกขนาด:", ["แนวตั้ง (9:16)", "แนวนอน (16:9)", "จัตุรัส (1:1)"])
+with st.sidebar:
+    st.header("⚙️ ตั้งค่าความเร็ว")
+    # ตั้งค่าเริ่มต้นเป็น Turbo เพื่อความไวที่สุดค่ะ
+    model_choice = st.radio("เลือกโหมด:", ["turbo (ไวมาก)", "flux (สวยแต่ช้า)"], index=0)
+    selected_model = model_choice.split(" ")[0]
+    
+    size_choice = st.selectbox("ขนาดภาพ:", ["TikTok (9:16)", "YouTube (16:9)", "Square (1:1)"])
 
-# กำหนดขนาดมาตรฐาน
-if "9:16" in target_size: w, h = 720, 1280
-elif "16:9" in target_size: w, h = 1280, 720
+# กำหนดขนาด
+if "9:16" in size_choice: w, h = 720, 1280
+elif "16:9" in size_choice: w, h = 1280, 720
 else: w, h = 1024, 1024
 
-user_prompt = st.text_area("อยากให้วาดอะไร (พิมพ์ไทยได้เลยครับ):", placeholder="เช่น แมวใส่ชุดอวกาศ")
+user_input = st.text_input("พิมพ์สิ่งที่ต้องการ (ไทย/อังกฤษ):", placeholder="เช่น แมวขี่มอเตอร์ไซค์")
 
-if st.button("✨ เริ่มเนรมิตภาพ"):
-    if user_prompt:
-        with st.spinner("⏳ กำลังแปลภาษาและวาดภาพ..."):
-            # ขั้นตอน 1: แปลภาษาก่อน
-            eng_prompt = translate_prompt(user_prompt)
-            st.caption(f"🔍 AI แปลเป็น: {eng_prompt}") # โชว์ให้ดูว่าแปลถูกไหม
+if st.button("🚀 เนรมิตภาพทันที"):
+    if user_input:
+        # ขั้นตอนที่ 1: แปลแบบด่วน
+        with st.status("🔍 กำลังประมวลผล...", expanded=True) as status:
+            st.write("🛰️ กำลังแปลภาษา...")
+            eng_p = fast_translate(user_input)
             
-            # ขั้นตอน 2: เจนภาพ
-            m_key = "flux" if "Flux" in mode else "turbo"
-            img, msg = generate_image_v6(eng_prompt, w, h, m_key)
+            st.write(f"🎨 กำลังวาด: {eng_p}...")
+            img = quick_generate(eng_p, w, h, selected_model)
             
             if img:
-                st.image(img, width=450, caption="ผลงานของคุณเก่งครับ")
+                status.update(label="✅ เสร็จเรียบร้อย!", state="complete", expanded=False)
+                st.image(img, width=400)
+                
+                # ปุ่มดาวน์โหลดด่วน
                 buf = io.BytesIO()
                 img.save(buf, format="PNG")
-                st.download_button("📥 ดาวน์โหลด", buf.getvalue(), "ai_art.png", "image/png")
+                st.download_button("📥 โหลดภาพ", buf.getvalue(), "fast_ai.png", "image/png")
             else:
-                st.error(f"❌ {msg}")
-                st.info("💡 ทริค: ถ้าโดน Rate Limit ลองเปลี่ยนคำสั่งนิดหน่อย หรือสลับไปใช้เน็ตมือถือจะหายทันทีครับ")
+                status.update(label="❌ ขัดข้อง", state="error")
+                st.error("ระบบไม่ตอบสนอง ลองกดใหม่อีกครั้งนะค่ะ")
     else:
-        st.warning("พิมพ์สิ่งที่ต้องการก่อนนะค่ะ")
+        st.warning("ใส่ไอเดียก่อนนะค่ะ")
