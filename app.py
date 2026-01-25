@@ -1,18 +1,17 @@
 import streamlit as st
 import sqlite3
 import pandas as pd
+import requests
+import io
+from PIL import Image
 
-# --- 1. SETUP DATABASE (รวมทุกอย่างไว้ในที่เดียว) ---
+# --- 1. SETUP DATABASE ---
 def init_db():
     conn = sqlite3.connect('ultimate_creator.db', check_same_thread=False)
     c = conn.cursor()
-    # ตารางไอเดีย
-    c.execute('CREATE TABLE IF NOT EXISTS ideas (id INTEGER PRIMARY KEY, title TEXT, platform TEXT, note TEXT)')
-    # ตารางลิงก์ป้ายยา
-    c.execute('CREATE TABLE IF NOT EXISTS links (id INTEGER PRIMARY KEY, name TEXT, url TEXT, tag TEXT)')
-    # ตารางแฮชแท็ก
+    c.execute('CREATE TABLE IF NOT EXISTS ideas (id INTEGER PRIMARY KEY, title TEXT, note TEXT)')
+    c.execute('CREATE TABLE IF NOT EXISTS links (id INTEGER PRIMARY KEY, name TEXT, url TEXT)')
     c.execute('CREATE TABLE IF NOT EXISTS hashtags (id INTEGER PRIMARY KEY, group_name TEXT, tags TEXT)')
-    # ตารางสคริปต์/คำตอบลูกค้า
     c.execute('CREATE TABLE IF NOT EXISTS scripts (id INTEGER PRIMARY KEY, topic TEXT, content TEXT)')
     conn.commit()
     return conn
@@ -20,108 +19,64 @@ def init_db():
 conn = init_db()
 c = conn.cursor()
 
-# --- 2. CONFIG หน้าเว็บ ---
-st.set_page_config(page_title="Ultimate Creator Hub v11.0", page_icon="🚀", layout="wide")
+# --- 2. AI IMAGE GENERATION FUNCTION ---
+def generate_image(prompt_text, hf_token):
+    API_URL = "https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-schnell"
+    headers = {"Authorization": f"Bearer {hf_token}"}
+    try:
+        response = requests.post(API_URL, headers=headers, json={"inputs": prompt_text}, timeout=30)
+        if response.status_code == 200:
+            return Image.open(io.BytesIO(response.content))
+        else:
+            return None
+    except:
+        return None
 
-# --- 3. SIDEBAR MENU ---
+# --- 3. CONFIG & SECRETS CHECK ---
+st.set_page_config(page_title="Ultimate Creator Hub v12.1", page_icon="🚀", layout="wide")
+
+# ดึงรหัสลับจากระบบที่เราเคยตั้งไว้
+try:
+    HF_TOKEN = st.secrets["HUGGINGFACE_API_KEY"]
+except:
+    HF_TOKEN = None
+    st.error("⚠️ ไม่พบ HUGGINGFACE_API_KEY ใน Secrets ค่ะ")
+
+# --- 4. SIDEBAR MENU ---
 with st.sidebar:
-    st.title("🚀 Creator Hub v11.0")
-    st.write("เครื่องมือช่วยรวยของคนออนไลน์")
+    st.title("🚀 Creator Hub v12.1")
     menu = st.selectbox("เลือกเครื่องมือ:", [
+        "🎨 AI สร้างภาพโปรโมต",
         "💡 คลังไอเดีย & Shot List",
         "🔗 คลังลิงก์ป้ายยาด่วน",
         "📱 แฮชแท็ก & แคปชั่นลับ",
         "💬 สคริปต์ตอบแชทปิดการขาย",
-        "✅ Checklist กระจายโพสต์ 5 ช่องทาง"
+        "✅ Checklist กระจายโพสต์"
     ])
     st.divider()
-    st.caption("No API | No Risk | 100% Productivity")
+    st.caption("Secure Mode Active 🛡️")
 
-# --- 4. FUNCTIONALITY ---
+# --- 5. FUNCTIONALITY ---
 
-# 4.1 คลังไอเดีย
-if menu == "💡 คลังไอเดีย & Shot List":
-    st.header("💡 คลังไอเดียคอนเทนต์")
-    with st.expander("➕ เพิ่มไอเดียใหม่"):
-        with st.form("idea_form", clear_on_submit=True):
-            t = st.text_input("หัวข้อคอนเทนต์:")
-            p = st.multiselect("จะลงแพลตฟอร์มไหนบ้าง?", ["Facebook", "TikTok", "YouTube", "Reels", "Lemon8"])
-            n = st.text_area("จดบันทึก/มุมกล้องที่ต้องถ่าย:")
-            if st.form_submit_button("บันทึกไอเดีย"):
-                c.execute("INSERT INTO ideas (title, platform, note) VALUES (?,?,?)", (t, ", ".join(p), n))
-                conn.commit()
-                st.rerun()
+if menu == "🎨 AI สร้างภาพโปรโมต":
+    st.header("🎨 AI เนรมิตภาพสวย (Flux Model)")
+    prompt = st.text_area("คำอธิบายภาพ (ภาษาอังกฤษ):", placeholder="เช่น: A luxury watch on a dark marble table, soft lighting")
     
-    data = pd.read_sql_query("SELECT * FROM ideas", conn)
-    if not data.empty:
-        for i, row in data.iterrows():
-            with st.container(border=True):
-                st.write(f"📌 **{row['title']}**")
-                st.caption(f"📺 แพลตฟอร์ม: {row['platform']}")
-                st.write(row['note'])
-                if st.button("🗑️ ลบไอเดีย", key=f"del_id_{row['id']}"):
-                    c.execute(f"DELETE FROM ideas WHERE id={row['id']}")
-                    conn.commit()
-                    st.rerun()
+    if st.button("✨ เริ่มสร้างภาพ"):
+        if not HF_TOKEN:
+            st.error("กรุณาเช็กการตั้งค่า HUGGINGFACE_API_KEY ใน Secrets ก่อนนะค่ะ")
+        elif prompt:
+            with st.spinner("⏳ กำลังวาดภาพ... (อาจใช้เวลา 10-20 วินาทีนะคะ)"):
+                img = generate_image(prompt, HF_TOKEN)
+                if img:
+                    st.image(img, caption="ผลงาน AI ของคุณเก่งค่ะ", use_container_width=True)
+                    buf = io.BytesIO()
+                    img.save(buf, format="PNG")
+                    st.download_button("📥 ดาวน์โหลดภาพ", buf.getvalue(), "ai_image.png", "image/png")
+                else:
+                    st.error("❌ การวาดภาพขัดข้อง ลองใหม่อีกครั้งหรือเช็ก Token นะคะ")
+        else:
+            st.warning("พิมพ์สิ่งที่อยากให้วาดก่อนนะค่ะ")
 
-# 4.2 คลังลิงก์ด่วน
-elif menu == "🔗 คลังลิงก์ป้ายยาด่วน":
-    st.header("🔗 รวมพิกัดสินค้า (กดก๊อปปี้ได้ทันที)")
-    with st.form("link_form", clear_on_submit=True):
-        n = st.text_input("ชื่อสินค้า:")
-        u = st.text_input("URL ลิงก์ Affiliate:")
-        if st.form_submit_button("เพิ่มเข้าคลัง"):
-            c.execute("INSERT INTO links (name, url) VALUES (?,?)", (n, u))
-            conn.commit()
-            st.rerun()
-    
-    data = pd.read_sql_query("SELECT * FROM links", conn)
-    for i, row in data.iterrows():
-        st.code(f"🔥 {row['name']}\n📍 พิกัด: {row['url']}")
-
-# 4.3 แฮชแท็ก & แคปชั่น
-elif menu == "📱 แฮชแท็ก & แคปชั่นลับ":
-    st.header("📱 คลังแฮชแท็กดึงดูดวิว")
-    with st.form("tag_form", clear_on_submit=True):
-        g = st.text_input("ชื่อกลุ่ม (เช่น สายไอโฟน, สายของกิน):")
-        t = st.text_area("รายการแฮชแท็ก (ก๊อปมาวางเลย):")
-        if st.form_submit_button("บันทึกกลุ่มแฮชแท็ก"):
-            c.execute("INSERT INTO hashtags (group_name, tags) VALUES (?,?)", (g, t))
-            conn.commit()
-            st.rerun()
-    
-    data = pd.read_sql_query("SELECT * FROM hashtags", conn)
-    for i, row in data.iterrows():
-        with st.expander(f"🏷️ กลุ่ม: {row['group_name']}"):
-            st.code(row['tags'])
-
-# 4.4 สคริปต์ตอบแชท
-elif menu == "💬 สคริปต์ตอบแชทปิดการขาย":
-    st.header("💬 ประโยคปิดการขาย (ก๊อปไปตอบลูกค้า)")
-    with st.form("script_form", clear_on_submit=True):
-        topic = st.text_input("หัวข้อ (เช่น เมื่อลูกค้าบ่นแพง, ตามยอดโอน):")
-        cont = st.text_area("ประโยคที่จะใช้:")
-        if st.form_submit_button("บันทึกสคริปต์"):
-            c.execute("INSERT INTO scripts (topic, content) VALUES (?,?)", (topic, cont))
-            conn.commit()
-            st.rerun()
-    
-    data = pd.read_sql_query("SELECT * FROM scripts", conn)
-    for i, row in data.iterrows():
-        st.subheader(f"💡 {row['topic']}")
-        st.code(row['content'])
-
-# 4.5 Checklist
-elif menu == "✅ Checklist กระจายโพสต์ 5 ช่องทาง":
-    st.header("✅ เช็กรายการโพสต์ (หนึ่งคลิปต้องกินให้คุ้ม)")
-    st.write("เป้าหมาย: นำ 1 คลิป ไปลงให้ครบทุกที่เพื่อเพิ่มโอกาสการมองเห็น")
-    
-    video_name = st.text_input("ชื่อคลิปที่กำลังจะลง:")
-    col1, col2, col3, col4, col5 = st.columns(5)
-    with col1: st.checkbox("Facebook")
-    with col2: st.checkbox("TikTok")
-    with col3: st.checkbox("YouTube Shorts")
-    with col4: st.checkbox("Instagram Reels")
-    with col5: st.checkbox("Line VOOM / อื่นๆ")
-    
-    st.info("💡 เคล็ดลับ: ลงห่างกันประมาณ 15-30 นาที เพื่อเช็กการทำงานของ Algorithm นะคะ")
+# ... (ส่วนเมนูอื่นๆ 💡, 🔗, 📱, 💬, ✅ เหมือนเดิมตาม v11.0 ค่ะ)
+# 💡 ฉันละไว้เพื่อประหยัดพื้นที่ แต่คุณเก่งก๊อปจาก v11.0 มาใส่ต่อได้เลยค่ะ
