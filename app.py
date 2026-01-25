@@ -19,37 +19,35 @@ def init_db():
 conn = init_db()
 c = conn.cursor()
 
-# --- 2. AI IMAGE GENERATION FUNCTION ---
+# --- 2. AI IMAGE GENERATION FUNCTION (แก้ Error 410 ตรงนี้) ---
 def generate_image(prompt_text, hf_token):
-    # ตรวจสอบ Model ID ให้แม่นยำที่สุด
-    API_URL = "https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-xl-base-1.0"
+    # เปลี่ยน URL เป็นรุ่นที่เสถียรที่สุด (Stable Diffusion v1.5)
+    API_URL = "https://api-inference.huggingface.co/models/runwayml/stable-diffusion-v1-5"
     headers = {"Authorization": f"Bearer {hf_token}"}
     try:
         response = requests.post(API_URL, headers=headers, json={"inputs": prompt_text}, timeout=45)
         if response.status_code == 200:
             return Image.open(io.BytesIO(response.content)), "OK"
-        elif response.status_code == 401:
-            return None, "Token ไม่ถูกต้อง (Unauthorized)"
         elif response.status_code == 503:
-            return None, "โมเดลกำลังโหลด (Model Loading) - ลองกดซ้ำนะคะ"
+            return None, "⏳ โมเดลกำลังตื่นนอน (Loading)... กรุณากดซ้ำอีก 2-3 ครั้งนะคะ"
+        elif response.status_code == 401:
+            return None, "🔑 กุญแจ (Token) ไม่ถูกต้อง หรือสิทธิ์ไม่พอ"
         else:
-            return None, f"Error Code: {response.status_code}"
+            return None, f"Error Code: {response.status_code} ({response.reason})"
     except Exception as e:
         return None, str(e)
 
 # --- 3. CONFIG & SECRETS CHECK ---
-st.set_page_config(page_title="Ultimate Creator Hub v12.2", page_icon="🚀", layout="wide")
+st.set_page_config(page_title="Creator Hub v12.3 (Stable)", page_icon="🚀", layout="wide")
 
-# ดึงรหัสลับจากระบบ Secrets
 try:
-    # ตรวจสอบชื่อตัวแปรให้ตรงกับในหน้า Streamlit Secrets เป๊ะๆ
     HF_TOKEN = st.secrets["HUGGINGFACE_API_KEY"]
-except Exception as e:
+except:
     HF_TOKEN = None
 
 # --- 4. SIDEBAR MENU ---
 with st.sidebar:
-    st.title("🚀 Creator Hub v12.2")
+    st.title("🚀 Creator Hub v12.3")
     menu = st.selectbox("เลือกเครื่องมือ:", [
         "🎨 AI สร้างภาพโปรโมต",
         "💡 คลังไอเดีย & Shot List",
@@ -59,29 +57,25 @@ with st.sidebar:
         "✅ Checklist กระจายโพสต์"
     ])
     st.divider()
-    st.caption("Debug Mode Enabled 🛠️")
+    st.caption("✅ Fix Error 410 Applied")
 
 # --- 5. FUNCTIONALITY ---
 
 if menu == "🎨 AI สร้างภาพโปรโมต":
-    st.header("🎨 AI เนรมิตภาพสวย (Debug Version)")
+    st.header("🎨 AI เนรมิตภาพ (รุ่นเสถียร)")
     
-    # --- ส่วนตรวจสอบกุญแจ (Debug) ---
-    with st.expander("🛠️ ตรวจสอบสถานะกุญแจ (สำหรับคุณเก่ง)"):
+    # Debug Bar
+    with st.expander("🛠️ เช็กสถานะระบบ"):
         if HF_TOKEN:
-            st.success(f"✅ ตรวจพบกุญแจในระบบ: {HF_TOKEN[:5]}***{HF_TOKEN[-4:]}")
-            st.info("ถ้าภาพไม่ขึ้น ให้ลองเช็กว่าใน Hugging Face ตั้งค่า Token เป็น 'Read' หรือยังนะคะ")
+            st.success(f"✅ กุญแจพร้อมใช้งาน (..{HF_TOKEN[-4:]})")
         else:
-            st.error("❌ ไม่พบกุญแจชื่อ 'HUGGINGFACE_API_KEY' ใน Secrets")
-            st.write("กรุณาไปที่ Manage App > Settings > Secrets แล้วพิมพ์:")
-            st.code('HUGGINGFACE_API_KEY = "hf_xxxxxx"')
-    # ----------------------------
+            st.error("❌ ไม่พบกุญแจใน Secrets")
 
-    prompt = st.text_area("คำอธิบายภาพ (ภาษาอังกฤษ):", placeholder="เช่น: A cute robot repairman, cinematic lighting")
+    prompt = st.text_area("คำอธิบายภาพ (ภาษาอังกฤษ):", placeholder="เช่น: A cute cat sitting on a computer desk, highly detailed, 8k")
     
     if st.button("✨ เริ่มสร้างภาพ"):
         if not HF_TOKEN:
-            st.error("ระบบทำงานไม่ได้เพราะไม่มีกุญแจค่ะ")
+            st.error("กรุณาตั้งค่า HUGGINGFACE_API_KEY ใน Secrets ก่อนนะคะ")
         elif prompt:
             with st.spinner("⏳ กำลังสั่ง AI วาดภาพ..."):
                 img, msg = generate_image(prompt, HF_TOKEN)
@@ -91,18 +85,16 @@ if menu == "🎨 AI สร้างภาพโปรโมต":
                     img.save(buf, format="PNG")
                     st.download_button("📥 ดาวน์โหลดภาพ", buf.getvalue(), "ai_image.png", "image/png")
                 else:
-                    st.error(f"❌ พบปัญหา: {msg}")
-                    if "503" in msg:
-                        st.warning("คำแนะนำ: โมเดลกำลังตื่นนอนค่ะ ลองกดปุ่มสร้างภาพซ้ำอีก 2-3 ครั้งนะคะ")
+                    st.warning(f"⚠️ แจ้งเตือน: {msg}")
         else:
             st.warning("พิมพ์สิ่งที่อยากให้วาดก่อนนะค่ะ")
 
-# --- เมนูอื่นๆ ใส่ไว้เพื่อให้แอปสมบูรณ์ค่ะ ---
+# --- เมนูเดิม (คงไว้ครบถ้วน) ---
 elif menu == "💡 คลังไอเดีย & Shot List":
     st.header("💡 คลังไอเดียคอนเทนต์")
     with st.form("idea_form", clear_on_submit=True):
-        t = st.text_input("หัวข้อคอนเทนต์:")
-        n = st.text_area("มุมกล้อง/สคริปต์ย่อ:")
+        t = st.text_input("หัวข้อ:")
+        n = st.text_area("รายละเอียด:")
         if st.form_submit_button("บันทึก"):
             c.execute("INSERT INTO ideas (title, note) VALUES (?,?)", (t, n))
             conn.commit()
@@ -111,7 +103,7 @@ elif menu == "💡 คลังไอเดีย & Shot List":
     for i, row in data.iterrows():
         with st.expander(f"📌 {row['title']}"):
             st.write(row['note'])
-            if st.button("🗑️ ลบ", key=f"del_{row['id']}"):
+            if st.button("ลบ", key=f"del_i_{row['id']}"):
                 c.execute(f"DELETE FROM ideas WHERE id={row['id']}")
                 conn.commit()
                 st.rerun()
@@ -120,7 +112,7 @@ elif menu == "🔗 คลังลิงก์ป้ายยาด่วน":
     st.header("🔗 รวมพิกัดสินค้า")
     with st.form("link_form", clear_on_submit=True):
         n = st.text_input("ชื่อสินค้า:")
-        u = st.text_input("URL ลิงก์:")
+        u = st.text_input("URL:")
         if st.form_submit_button("เพิ่ม"):
             c.execute("INSERT INTO links (name, url) VALUES (?,?)", (n, u))
             conn.commit()
@@ -130,10 +122,10 @@ elif menu == "🔗 คลังลิงก์ป้ายยาด่วน":
         st.code(f"🔥 {row['name']}\n📍 พิกัด: {row['url']}")
 
 elif menu == "📱 แฮชแท็ก & แคปชั่นลับ":
-    st.header("📱 คลังแฮชแท็กดึงดูดวิว")
+    st.header("📱 คลังแฮชแท็ก")
     with st.form("tag_form", clear_on_submit=True):
-        g = st.text_input("ชื่อกลุ่ม:")
-        t = st.text_area("แฮชแท็ก:")
+        g = st.text_input("กลุ่ม:")
+        t = st.text_area("Tags:")
         if st.form_submit_button("บันทึก"):
             c.execute("INSERT INTO hashtags (group_name, tags) VALUES (?,?)", (g, t))
             conn.commit()
@@ -144,7 +136,7 @@ elif menu == "📱 แฮชแท็ก & แคปชั่นลับ":
             st.code(row['tags'])
 
 elif menu == "💬 สคริปต์ตอบแชทปิดการขาย":
-    st.header("💬 ประโยคปิดการขาย")
+    st.header("💬 สคริปต์ตอบแชท")
     with st.form("script_form", clear_on_submit=True):
         topic = st.text_input("หัวข้อ:")
         cont = st.text_area("ข้อความ:")
@@ -158,8 +150,8 @@ elif menu == "💬 สคริปต์ตอบแชทปิดการข�
         st.code(row['content'])
 
 elif menu == "✅ Checklist กระจายโพสต์":
-    st.header("✅ เช็กรายการโพสต์ 5 ช่องทาง")
-    v_name = st.text_input("ชื่อคลิป:")
+    st.header("✅ Checklist")
+    st.text_input("ชื่อคลิป:")
     st.checkbox("Facebook")
     st.checkbox("TikTok")
     st.checkbox("YouTube Shorts")
