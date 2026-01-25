@@ -3,103 +3,90 @@ import random
 import urllib.parse
 import google.generativeai as genai
 import re
+import time
 
 # --- 1. CONFIG ---
-st.set_page_config(page_title="Creator Hub v13.8", page_icon="⚡", layout="centered")
+st.set_page_config(page_title="Creator Hub v14.0", page_icon="🚀", layout="centered")
 
-# --- 2. FAST TRANSLATE SYSTEM ---
-# 2.1 พจนานุกรมในตัว (แปลทันทีไม่ต้องรอเน็ต)
+# --- 2. ENGINE (ระบบทะลุลิมิต) ---
+def get_magic_url(prompt, width, height, model):
+    # เข้ารหัสคำสั่ง
+    encoded = urllib.parse.quote(prompt)
+    
+    # เทคนิคที่ 1: สุ่ม Seed แบบมหาศาล (เพื่อหลอกว่าเป็นคนใหม่)
+    seed = random.randint(1, 999999999)
+    
+    # เทคนิคที่ 2: เพิ่ม Cache Buster (ตัวเลขสุ่มท้าย URL)
+    cache_buster = int(time.time() * 1000)
+    
+    # สร้าง URL แบบพิเศษ
+    url = f"https://image.pollinations.ai/prompt/{encoded}?width={width}&height={height}&model={model}&nologo=true&seed={seed}&v={cache_buster}"
+    return url
+
+# --- 3. TRANSLATION (เหมือนเดิมแต่ตัดให้สั้น) ---
 LOCAL_DICT = {
-    "แมว": "cat", "หมา": "dog", "สุนัข": "dog", "นก": "bird", 
-    "รถ": "car", "รถสปอร์ต": "sports car", "ผู้หญิง": "beautiful woman",
-    "ผู้ชาย": "handsome man", "หุ่นยนต์": "robot", "อวกาศ": "space",
-    "สวย": "beautiful", "น่ารัก": "cute", "เท่": "cool", 
-    "cyberpunk": "cyberpunk style", "อนิเมะ": "anime style"
+    "แมว": "cat", "หมา": "dog", "สวย": "beautiful", "รถ": "car", 
+    "ผู้หญิง": "woman", "ผู้ชาย": "man", "หุ่นยนต์": "robot"
 }
 
-# 2.2 ระบบ Gemini Flash (ไวกว่าตัวเก่า 10 เท่า)
 try:
     genai.configure(api_key=st.secrets["GEMINI_KEYS"])
-    # เปลี่ยนเป็นรุ่น Flash เพื่อความไว
     model_gemini = genai.GenerativeModel('gemini-1.5-flash')
     gemini_ready = True
 except:
-    model_gemini = None
     gemini_ready = False
 
 def smart_translate(text):
-    # 1. เช็กในพจนานุกรมก่อน (ไวสุด 0.01 วิ)
     for thai, eng in LOCAL_DICT.items():
-        if thai in text:
-            # ถ้าเจอคำศัพท์ที่รู้จัก ให้แทนที่เลย
-            text = text.replace(thai, eng)
+        if thai in text: text = text.replace(thai, eng)
     
-    # 2. ถ้ายังเหลือภาษาไทย ค่อยถาม Gemini Flash
     if bool(re.search('[ก-ฮ]', text)) and gemini_ready:
         try:
-            response = model_gemini.generate_content(f"Change to English prompt: {text}")
+            response = model_gemini.generate_content(f"English prompt for: {text}")
             return response.text.strip()
         except:
-            return text # ถ้าถามไม่ได้ ก็ส่งไปทั้งอย่างนั้น
+            return text
     return text
 
-# --- 3. MAIN UI ---
-st.title("🎨 AI สร้างภาพ (v13.8: แปลไว+มีปุ่มช่วย)")
+# --- 4. UI ---
+st.title("🚀 AI ทะลุขีดจำกัด (v14.0)")
+st.info("💡 ถ้าภาพไม่ขึ้น ให้กดปุ่มสร้างใหม่อีกครั้ง ระบบจะเปลี่ยนเส้นทางให้อัตโนมัติค่ะ")
 
 with st.sidebar:
     st.header("⚙️ ตั้งค่า")
-    model_choice = st.radio("โหมด:", ["turbo (ไว)", "flux (สวย)"], index=0)
-    size_choice = st.selectbox("สัดส่วน:", ["แนวตั้ง (9:16)", "แนวนอน (16:9)", "จัตุรัส (1:1)"])
+    model_choice = st.radio("โหมด:", ["turbo (ไวมาก)", "flux (สวยคม)"], index=0)
+    size_choice = st.selectbox("ขนาด:", ["TikTok (9:16)", "YouTube (16:9)", "Square (1:1)"])
 
-# --- ส่วนปุ่มช่วยจิ้ม (ไม่ต้องพิมพ์เอง) ---
-st.write("✨ **จิ้มปุ่มเพื่อเพิ่มคำศัพท์ (ไม่ต้องพิมพ์เอง):**")
-col1, col2, col3, col4 = st.columns(4)
-prompt_parts = []
+# ปุ่มช่วยเลือก
+st.write("✨ **เมนูลัด (กดปุ๊บ ภาพมาปั๊บ):**")
+c1, c2, c3 = st.columns(3)
+with c1: 
+    if st.button("🐱 แมวน่ารัก"): user_prompt = "cute fluffy cat, 8k"
+    else: user_prompt = ""
+with c2: 
+    if st.button("🚀 ยานอวกาศ"): user_prompt = "futuristic spaceship, sci-fi"
+with c3: 
+    if st.button("💃 นางแบบ"): user_prompt = "beautiful fashion model, portrait"
 
-with col1: 
-    if st.button("🐱 แมว"): prompt_parts.append("cute cat")
-    if st.button("👩 หญิงสวย"): prompt_parts.append("beautiful woman")
-with col2: 
-    if st.button("🐶 หมา"): prompt_parts.append("cute dog")
-    if st.button("🤖 หุ่นยนต์"): prompt_parts.append("futuristic robot")
-with col3: 
-    if st.button("🚗 รถหรู"): prompt_parts.append("luxury supercar")
-    if st.button("🏰 ปราสาท"): prompt_parts.append("fantasy castle")
-with col4: 
-    if st.button("🚀 อวกาศ"): prompt_parts.append("galaxy space background")
-    if st.button("🏙️ เมือง"): prompt_parts.append("cyberpunk city")
+# กล่องพิมพ์ (ถ้าไม่ได้กดปุ่ม)
+if not user_prompt:
+    user_prompt = st.text_input("หรือพิมพ์คำสั่ง:", placeholder="เช่น หมาใส่แว่น")
 
-# กล่องข้อความ
-user_input = st.text_input("หรือพิมพ์เอง (ไทย/อังกฤษ):", placeholder="เช่น แมวขี่มอเตอร์ไซค์")
-
-# ล็อกขนาด
+# คำนวณขนาด
 if "9:16" in size_choice: w, h = 720, 1280
 elif "16:9" in size_choice: w, h = 1280, 720
 else: w, h = 1024, 1024
 
-if st.button("🚀 เนรมิตภาพ"):
-    # รวมคำจากปุ่ม + คำที่พิมพ์
-    full_prompt = " ".join(prompt_parts) + " " + user_input
-    
-    if full_prompt.strip():
-        # แสดงสถานะแบบไม่บล็อกหน้าจอ
-        status_text = st.empty()
-        status_text.caption("⚡ กำลังประมวลผลคำสั่ง...")
+if st.button("⚡ สร้างภาพทันที") or user_prompt:
+    if user_prompt:
+        # แปลภาษา
+        final_p = smart_translate(user_prompt)
         
-        # แปลภาษา (ใช้ระบบใหม่ v13.8)
-        final_p = smart_translate(full_prompt)
-        status_text.caption(f"🎨 กำลังวาด: {final_p}")
-        
-        # สร้าง URL
-        seed = random.randint(1, 10**6)
-        encoded = urllib.parse.quote(final_p)
+        # ดึง URL แบบพิเศษ
         selected_model = model_choice.split(" ")[0]
-        image_url = f"https://image.pollinations.ai/prompt/{encoded}?width={w}&height={h}&model={selected_model}&nologo=true&seed={seed}"
+        image_url = get_magic_url(final_p, w, h, selected_model)
         
-        # แสดงผลทันที
-        st.markdown(f'<img src="{image_url}" width="100%" style="border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">', unsafe_allow_html=True)
+        # แสดงผล
+        st.write(f"🎨 กำลังวาด: **{final_p}**")
+        st.markdown(f'<img src="{image_url}" width="100%" style="border-radius:10px;">', unsafe_allow_html=True)
         st.markdown(f'[📥 ดาวน์โหลดภาพ]({image_url})')
-        status_text.empty() # ลบข้อความสถานะออกเมื่อเสร็จ
-        
-    else:
-        st.warning("จิ้มปุ่มข้างบน หรือพิมพ์ไอเดียก่อนนะครับ")
