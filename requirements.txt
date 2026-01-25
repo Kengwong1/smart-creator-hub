@@ -5,3 +5,4 @@ requests
 Pillow
 deep-translator
 pandas
+streamlit-image-coordinates
