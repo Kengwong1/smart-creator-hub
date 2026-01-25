@@ -6,11 +6,10 @@ import re
 from PIL import Image
 import requests
 from io import BytesIO
-# เพิ่มไลบรารีใหม่สำหรับจับการคลิก
 from streamlit_image_coordinates import streamlit_image_coordinates
 
 # --- 1. CONFIG ---
-st.set_page_config(page_title="SME Pro Studio v16.3", page_icon="🛍️", layout="wide")
+st.set_page_config(page_title="SME Pro Studio v16.4", page_icon="🧼", layout="wide")
 
 # --- CSS ---
 st.markdown("""
@@ -42,12 +41,19 @@ def create_pro_prompt(product_input, theme_key):
     for thai, eng in LOCAL_DICT.items():
         if thai in product_eng: product_eng = product_eng.replace(thai, eng)
     
+    # --- จุดแก้สำคัญ (Geometry Lock) ---
     shape_fix = ""
     if "soap" in product_eng.lower():
-        shape_fix = ", perfectly shaped rectangular bar, symmetrical form"
-    
+        # เปลี่ยนคำสั่ง: บังคับเป็น "กล่องสี่เหลี่ยมแข็ง (Cuboid)" และ "Mockup" เพื่อให้เหลี่ยมคม
+        shape_fix = ", rectangular cuboid shape, sharp straight edges, symmetrical perspective, product packaging mockup, front view"
+    elif "box" in product_eng.lower() or "กล่อง" in product_input:
+         shape_fix = ", rectangular box, sharp corners, straight lines, packaging mockup"
+
     theme_prompt = THEMES[theme_key]
-    full_prompt = f"Professional product photography of {product_eng}{shape_fix}, {theme_prompt}, blank product surface, no text, no label, 8k resolution"
+    
+    # ย้าย shape_fix ไปไว้หน้าสุด เพื่อให้ AI ให้ความสำคัญสูงสุด
+    # และเพิ่ม 'telephoto lens' เพื่อลดการบิดเบี้ยวของภาพ (Perspective Distortion)
+    full_prompt = f"Professional product photography of {product_eng}{shape_fix}, {theme_prompt}, blank product surface, no text, no label, 8k resolution, telephoto lens, architectural symmetry"
     return full_prompt
 
 def load_image_from_url(url):
@@ -56,12 +62,11 @@ def load_image_from_url(url):
     return img
 
 # --- INIT SESSION STATE ---
-# จำค่าตำแหน่ง X, Y ไว้
 if 'logo_x' not in st.session_state: st.session_state.logo_x = 512
 if 'logo_y' not in st.session_state: st.session_state.logo_y = 512
 
 # --- 3. UI ---
-st.title("🛍️ SME Pro Studio (v16.3: จิ้มเพื่อวางโลโก้)")
+st.title("🛍️ SME Pro Studio (v16.4: ล็อกทรงสบู่คมกริบ)")
 
 main_col1, main_col2 = st.columns([1, 2])
 
@@ -73,17 +78,17 @@ with main_col1:
     
     if st.button("✨ สร้างฉากใหม่", use_container_width=True):
         if user_product:
-            with st.spinner("⏳ กำลังเนรมิตฉาก..."):
+            with st.spinner("⏳ กำลังจัดแสงและล็อกรูปทรง..."):
                 final_prompt = create_pro_prompt(user_product, selected_theme)
                 seed = random.randint(1, 999999)
                 encoded = urllib.parse.quote(final_prompt)
+                # ใช้ Flux เหมือนเดิม
                 image_url = f"https://image.pollinations.ai/prompt/{encoded}?width=1024&height=1024&model=flux&nologo=true&seed={seed}"
                 
                 st.session_state.generated_image = load_image_from_url(image_url)
-                # รีเซ็ตตำแหน่งโลโก้ไปตรงกลางเมื่อสร้างภาพใหม่
                 st.session_state.logo_x = 512
                 st.session_state.logo_y = 512
-                st.success("✅ ภาพมาแล้ว!")
+                st.success("✅ ได้ภาพทรงสวยแล้ว!")
 
 # === ฝั่งขวา: แต่งภาพ ===
 with main_col2:
@@ -95,24 +100,21 @@ with main_col2:
         
         edit_c1, edit_c2 = st.columns([1.5, 1])
         
-        # --- โซนปุ่มปรับ (ขวา) ---
         with edit_c2:
             st.write("🎛️ **ปรับขนาด/หมุน**")
             if uploaded_logo:
                 logo_size = st.slider("🔍 ขนาด", 10, 500, 150)
                 rotation = st.slider("🔄 หมุน", -180, 180, 0)
-                st.info("💡 **วิธีวางโลโก้:** เอาเมาส์ไปคลิกบนรูปภาพทางซ้าย ตรงจุดที่ต้องการได้เลยครับ")
+                st.info("💡 **วิธีใช้:** จิ้มบนภาพซ้ายมือ เพื่อวางโลโก้ได้เลยครับ")
             else:
                 st.info("👈 อัปโหลดโลโก้ก่อนนะครับ")
 
-        # --- โซนรูปภาพ (ซ้าย) ---
         with edit_c1:
             if uploaded_logo:
                 logo = Image.open(uploaded_logo)
                 logo.thumbnail((logo_size, logo_size))
                 logo = logo.rotate(-rotation, expand=True, resample=Image.BICUBIC)
                 
-                # คำนวณตำแหน่งจาก Session State (ที่ได้จากการคลิก)
                 logo_w, logo_h = logo.size
                 offset = (st.session_state.logo_x - logo_w//2, st.session_state.logo_y - logo_h//2)
                 
@@ -121,18 +123,14 @@ with main_col2:
                 except:
                     bg_image.paste(logo, offset)
             
-            # --- พระเอกของเรา: รูปภาพที่คลิกได้ ---
-            # ถ้ามีการคลิกเกิดขึ้น มันจะคืนค่า coords กลับมา
+            # Click-to-place Widget
             coords = streamlit_image_coordinates(bg_image, use_column_width=True)
             
-            # ถ้ามีการคลิก ให้อัปเดตตำแหน่ง X, Y ในหน่วยความจำ
             if coords:
                 st.session_state.logo_x = coords["x"]
                 st.session_state.logo_y = coords["y"]
-                # สั่ง rerun เพื่อให้ภาพอัปเดตตำแหน่งโลโก้ทันที
                 st.rerun()
 
-            # ปุ่มดาวน์โหลด
             buf = BytesIO()
             bg_image.save(buf, format="PNG")
             byte_im = buf.getvalue()
