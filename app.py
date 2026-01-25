@@ -22,7 +22,7 @@ c = conn.cursor()
 # --- 2. AI IMAGE GENERATION FUNCTION ---
 def generate_image(prompt_text, hf_token):
     # ตรวจสอบ Model ID ให้แม่นยำที่สุด
-    API_URL = "https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-schnell"
+    API_URL = "https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-xl-base-1.0"
     headers = {"Authorization": f"Bearer {hf_token}"}
     try:
         response = requests.post(API_URL, headers=headers, json={"inputs": prompt_text}, timeout=45)
