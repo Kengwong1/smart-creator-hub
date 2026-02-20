@@ -67,7 +67,7 @@ st.markdown("""
 # --- GEMINI SETUP ---
 try:
     genai.configure(api_key=st.secrets["GEMINI_KEYS"])
-    model = genai.GenerativeModel('gemini-1.5-flash-latest')
+    model = genai.GenerativeModel('gemini-pro')
     gemini_ready = True
 except:
     gemini_ready = False
