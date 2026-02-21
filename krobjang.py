@@ -92,7 +92,7 @@ FREE_LIMIT = 5
 def init_gemini(api_key):
     try:
         genai.configure(api_key=api_key)
-        model = genai.GenerativeModel('gemini-2.0-flash-lite')
+        model = genai.GenerativeModel('gemini-1.5-flash-8b')
         return model, True
     except:
         return None, False
